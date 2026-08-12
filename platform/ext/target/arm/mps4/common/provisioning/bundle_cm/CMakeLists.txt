@@ -25,6 +25,7 @@ endif()
 set_target_properties(cm_provisioning_bundle
     PROPERTIES
         SUFFIX ".axf"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 target_add_scatter_file(cm_provisioning_bundle
@@ -36,10 +37,9 @@ target_add_scatter_file(cm_provisioning_bundle
 
 target_link_options(cm_provisioning_bundle
     PRIVATE
-        $<$<C_COMPILER_ID:GNU>:-Wl,-Map=${CMAKE_BINARY_DIR}/bin/cm_provisioning_bundle.map>
+        $<$<C_COMPILER_ID:GNU,Clang>:LINKER:-Map=${CMAKE_BINARY_DIR}/bin/cm_provisioning_bundle.map>
         $<$<C_COMPILER_ID:ARMClang>:--map --entry=do_provision>
         $<$<C_COMPILER_ID:IAR>:--map\;${CMAKE_BINARY_DIR}/bin/cm_provisioning_bundle.map>
-        $<$<C_COMPILER_ID:Clang>:-Wl,-Map=${CMAKE_BINARY_DIR}/bin/cm_provisioning_bundle.map>
 )
 
 target_compile_options(cm_provisioning_bundle
@@ -55,14 +55,14 @@ target_link_options(cm_provisioning_bundle
 
 target_link_options(cm_provisioning_bundle
     PRIVATE
-        $<$<NOT:$<C_COMPILER_ID:Clang>>:--entry=do_provision>
+        $<$<C_COMPILER_ID:ARMClang,IAR>:LINKER:--entry=do_provision>
 )
 
 target_sources(cm_provisioning_bundle
     PRIVATE
         cm_provisioning_code.c
         cm_provisioning_data.c
-        $<$<BOOL:${CONFIG_GNU_SYSCALL_STUB_ENABLED}>:${CMAKE_SOURCE_DIR}/platform/ext/common/syscalls_stub.c>
+        $<$<C_COMPILER_ID:GNU>:${CMAKE_SOURCE_DIR}/platform/ext/common/syscalls_stub.c>
 )
 
 target_include_directories(cm_provisioning_bundle
@@ -101,7 +101,10 @@ add_custom_command(OUTPUT cm_provisioning_data.c
         --sam_config=${SAM_CONFIG}
 )
 
+set(bin_dir ${CMAKE_BINARY_DIR}/bin)
+
 add_custom_command(OUTPUT cm_provisioning_bundle.bin
+    OUTPUT ${bin_dir}/cm_provisioning_bundle.bin
     DEPENDS $<TARGET_FILE_DIR:cm_provisioning_bundle>/cm_provisioning_bundle.axf
     DEPENDS $<TARGET_FILE_DIR:bl1_2>/bl1_2_padded_hash.bin
     DEPENDS $<TARGET_FILE_DIR:bl1_2>/bl1_2_padded.bin
@@ -121,5 +124,13 @@ add_custom_command(OUTPUT cm_provisioning_bundle.bin
                     --code_pad_size ${PROVISIONING_CODE_PADDED_SIZE}
                     --data_pad_size ${PROVISIONING_DATA_PADDED_SIZE}
                     --values_pad_size ${PROVISIONING_VALUES_PADDED_SIZE}
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/cm_provisioning_bundle.bin ${CMAKE_BINARY_DIR}/bin/cm_provisioning_bundle.bin
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/cm_provisioning_bundle.bin ${bin_dir}/cm_provisioning_bundle.bin
+)
+
+add_convert_to_offset_hex_target(cm_provisioning_bundle
+        INPUT_FILE          ${bin_dir}/cm_provisioning_bundle.bin
+        OFFSET_MACRO_NAME   CM_PROVISIONING_BUNDLE_START
+        INCLUDE_BL2_HEADER  FALSE
+        MIRROR_FILE         $<TARGET_PROPERTY:cm_provisioning_bundle,LINK_DEPENDS>
+        OUTPUT_FILE         ${bin_dir}/cm_provisioning_bundle.hex
 )

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2025, Arm Limited. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  * Copyright (c) 2021-2023 Cypress Semiconductor Corporation (an Infineon
  * company) or an affiliate of Cypress Semiconductor Corporation. All rights
  * reserved.
@@ -97,11 +97,11 @@ struct partition_{{manifest.name|lower}}_load_info_t {
 
 /* Partition load, deps, service load data. Put to a dedicated section. */
 #if defined(__ICCARM__)
-#pragma location = ".part_load_priority_{{numbered_priority}}"
+#pragma location = ".part_load"
 __root
 #endif /* __ICCARM__ */
 const struct partition_{{manifest.name|lower}}_load_info_t {{manifest.name|lower}}_load
-    __attribute__((used, section(".part_load_priority_{{numbered_priority}}"))) = {
+    __attribute__((used, section(".part_load"))) = {
     .load_info = {
 {% if manifest.psa_framework_version == 1.0 %}
         .psa_ff_ver                 = 0x0100 | PARTITION_INFO_MAGIC,
@@ -135,6 +135,7 @@ const struct partition_{{manifest.name|lower}}_load_info_t {{manifest.name|lower
         .client_id_base             = {{manifest.client_id_base}},
         .client_id_limit            = {{manifest.client_id_limit}},
 {% endif %}
+        .load_order                 = {{load_order}},
     },
 {% if config_impl['CONFIG_TFM_SPM_BACKEND_IPC'] == '1' or manifest.model == "IPC" %}
     .stack_addr                     = (uintptr_t){{manifest.name|lower}}_stack,
@@ -205,16 +206,16 @@ const struct partition_{{manifest.name|lower}}_load_info_t {{manifest.name|lower
         {
             .mem.start              = {{region.base}},
             .mem.limit              = {{region.base}} + {{region.size}},
-            .attr                   = ASSET_ATTR_NUMBERED_MMIO
+            .attr                   = (enum assets_attribute_t)(ASSET_ATTR_NUMBERED_MMIO
         {% elif region.name %}
         {
             .dev.dev_ref            = PTR_TO_REFERENCE({{region.name}}),
-            .attr                   = ASSET_ATTR_NAMED_MMIO
+            .attr                   = (enum assets_attribute_t)(ASSET_ATTR_NAMED_MMIO
         {% endif %}
         {% if region.permission == "READ-WRITE" %}
-                                    | ASSET_ATTR_READ_WRITE,
+                                    | ASSET_ATTR_READ_WRITE),
         {% else %}
-                                    | ASSET_ATTR_READ_ONLY,
+                                    | ASSET_ATTR_READ_ONLY),
         {% endif %}
         },
         {% if region.conditional %}
@@ -234,16 +235,16 @@ const struct partition_{{manifest.name|lower}}_load_info_t {{manifest.name|lower
         {
             .mem.start              = {{region.base}},
             .mem.limit              = {{region.base}} + {{region.size}},
-            .attr                   = ASSET_ATTR_NUMBERED_MMIO
+            .attr                   = (enum assets_attribute_t)(ASSET_ATTR_NUMBERED_MMIO
         {% elif region.name %}
         {
             .dev.dev_ref            = PTR_TO_REFERENCE({{region.name}}),
-            .attr                   = ASSET_ATTR_NAMED_MMIO
+            .attr                   = (enum assets_attribute_t)(ASSET_ATTR_NAMED_MMIO
         {% endif %}
         {% if region.permission == "READ-WRITE" %}
-                                    | ASSET_ATTR_READ_WRITE,
+                                    | ASSET_ATTR_READ_WRITE),
         {% else %}
-                                    | ASSET_ATTR_READ_ONLY,
+                                    | ASSET_ATTR_READ_ONLY),
         {% endif %}
         },
         {% if region.conditional %}
@@ -277,6 +278,7 @@ const struct partition_{{manifest.name|lower}}_load_info_t {{manifest.name|lower
             {% set irq_info.client_id_base = irq.source + "_CLIENT_ID_BASE" %}
             {% set irq_info.client_id_limit = irq.source + "_CLIENT_ID_LIMIT" %}
         {% endif %}
+        {% set irq_info.mbox_flags = irq.mbox_flags %}
         {
             .init = {{irq_info.source_symbol + "_init"}},
             .flih_func = {{irq_info.flih_func}},
@@ -287,6 +289,11 @@ const struct partition_{{manifest.name|lower}}_load_info_t {{manifest.name|lower
             .client_id_base = {{irq_info.client_id_base}},
             .client_id_limit = {{irq_info.client_id_limit}},
         {% endif %}
+        {% if irq.mbox_flags is defined %}
+            .mbox_flags = {{irq_info.mbox_flags}},
+        {% else %}
+            .mbox_flags = MBOX_IRQ_FLAGS_NONE,
+        {% endif %}
         },
     {% endfor %}
     },
@@ -295,18 +302,18 @@ const struct partition_{{manifest.name|lower}}_load_info_t {{manifest.name|lower
 
 /* Placeholder for partition and service runtime space. Do not reference it. */
 #if defined(__ICCARM__)
-#pragma location=".bss.part_runtime_priority_{{numbered_priority}}"
+#pragma location=".bss.part_runtime"
 __root
 #endif /* __ICCARM__ */
 static struct partition_t {{manifest.name|lower}}_partition_runtime_item
-    __attribute__((used, section(".bss.part_runtime_priority_{{numbered_priority}}")));
+    __attribute__((used, section(".bss.part_runtime")));
 {% if counter.service_counter > 0 %}
 #if defined(__ICCARM__)
-#pragma location = ".bss.serv_runtime_priority_{{numbered_priority}}"
+#pragma location = ".bss.serv_runtime"
 __root
 #endif /* __ICCARM__ */
 static struct service_t {{manifest.name|lower}}_service_runtime_item[{{(manifest.name|upper + "_NSERVS")}}]
-    __attribute__((used, section(".bss.serv_runtime_priority_{{numbered_priority}}")));
+    __attribute__((used, section(".bss.serv_runtime")));
 {% endif %}
 
 {% if manifest.ns_agent is sameas true %}

@@ -7,16 +7,27 @@
 
 set(CMAKE_SYSTEM_NAME Generic)
 
-set(CMAKE_C_COMPILER ${CROSS_COMPILE}-gcc)
+find_program(CMAKE_C_COMPILER ${CROSS_COMPILE}-gcc)
+if(CMAKE_C_COMPILER STREQUAL "CMAKE_C_COMPILER-NOTFOUND")
+    message(FATAL_ERROR "Could not find compiler: '${CROSS_COMPILE}-gcc'")
+endif()
+
 set(CMAKE_C_COMPILER_FORCED TRUE)
-set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD 11)
 
 set(CMAKE_ASM_COMPILER ${CMAKE_C_COMPILER})
 
 # C++ support is not quaranted. This settings is to compile with RPi Pico SDK.
-set(CMAKE_CXX_COMPILER ${CROSS_COMPILE}-g++)
+find_program(CMAKE_CXX_COMPILER ${CROSS_COMPILE}-g++)
+if(CMAKE_CXX_COMPILER STREQUAL "CMAKE_CXX_COMPILER-NOTFOUND")
+    message(WARNING "Could not find compiler: '${CROSS_COMPILE}-g++'")
+endif()
+
 set(CMAKE_CXX_COMPILER_FORCED TRUE)
 set(CMAKE_CXX_STANDARD 11)
+
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+include(imported_target)
 
 # This variable name is a bit of a misnomer. The file it is set to is included
 # at a particular step in the compiler initialisation. It is used here to
@@ -27,8 +38,8 @@ set(CMAKE_USER_MAKE_RULES_OVERRIDE ${CMAKE_CURRENT_LIST_DIR}/cmake/set_extension
 # CMAKE_C_COMPILER_VERSION is not initialised at this moment so do it manually
 EXECUTE_PROCESS(COMMAND ${CMAKE_C_COMPILER} -dumpversion OUTPUT_VARIABLE CMAKE_C_COMPILER_VERSION)
 
-if (${CMAKE_C_COMPILER_VERSION} VERSION_LESS 10.3.1)
-    message(FATAL_ERROR "Please use GNU Arm toolchain version 10.3.1 or later")
+if (${CMAKE_C_COMPILER_VERSION} VERSION_LESS 12.2)
+    message(FATAL_ERROR "Please use GNU Arm toolchain version 12.2.Rel1 or later")
 endif()
 
 function(min_toolchain_version mcpu gnu-version)
@@ -49,24 +60,23 @@ include(mcpu_features)
 file(REAL_PATH "${CMAKE_SOURCE_DIR}/../" TOP_LEVEL_PROJECT_DIR)
 
 add_compile_options(
-    -mfix-cmse-cve-2021-35465
     -Wall
     -Wno-format
+    -Warray-parameter
     -Wno-unused-but-set-variable
     -Wnull-dereference
     -Wno-error=incompatible-pointer-types
-    -c
     -fdata-sections
     -ffunction-sections
     -fno-builtin
-    -fshort-enums
     -funsigned-char
     # Strip /workspace/
     -fmacro-prefix-map=${TOP_LEVEL_PROJECT_DIR}/=
     # Strip /workspace/trusted-firmware-m
     -fmacro-prefix-map=${CMAKE_SOURCE_DIR}/=
     -mthumb
-    $<$<OR:$<BOOL:${TFM_DEBUG_SYMBOLS}>,$<BOOL:${TFM_CODE_COVERAGE}>>:-g>
+    # Always enable debug symbols — this should not affect the final binary files
+    -g
     $<$<AND:$<COMPILE_LANGUAGE:C>,$<BOOL:${TFM_DEBUG_OPTIMISATION}>,$<CONFIG:Debug>>:-Og>
     $<$<AND:$<COMPILE_LANGUAGE:C>,$<BOOL:${CONFIG_TFM_WARNINGS_ARE_ERRORS}>>:-Werror>
 )
@@ -84,9 +94,7 @@ if (CMAKE_GENERATOR STREQUAL "Ninja")
 endif()
 
 add_link_options(
-    -mcpu=${TFM_SYSTEM_PROCESSOR}
-    -specs=nano.specs
-    -specs=nosys.specs
+    -mcpu=${TFM_SYSTEM_PROCESSOR_FEATURED}
     LINKER:-check-sections
     LINKER:-fatal-warnings
     LINKER:--gc-sections
@@ -97,19 +105,6 @@ set(LINKER_VENEER_OUTPUT_FLAG -Wl,--cmse-implib,--out-implib=)
 
 if(NOT CONFIG_TFM_MEMORY_USAGE_QUIET)
     add_link_options(LINKER:--print-memory-usage)
-endif()
-
-# GNU Arm compiler version greater equal than *11.3.Rel1*
-# has a linker issue that required system calls are missing,
-# such as _read and _write. Add stub functions of required
-# system calls to solve this issue.
-#
-# READONLY linker script attribute is not supported in older
-# GNU Arm compilers. For these version the preprocessor will
-# remove the READONLY string from the linker scripts.
-if (CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 11.3.1)
-    set(CONFIG_GNU_SYSCALL_STUB_ENABLED TRUE)
-    set(CONFIG_GNU_LINKER_READONLY_ATTRIBUTE TRUE)
 endif()
 
 set(BL2_COMPILER_CP_FLAG -mfloat-abi=soft)
@@ -130,17 +125,42 @@ else()
     set(LINKER_CP_OPTION -mfloat-abi=soft)
 endif()
 
+# tfm_s specific compile and link options
+add_library(tfm_s_build_flags INTERFACE)
+
+# BL2 specific compile and link options
+add_library(bl2_build_flags INTERFACE)
+
+# BL1 specific compile and link options
+add_library(bl1_build_flags INTERFACE)
+
+if (CONFIG_TFM_INCLUDE_STDLIBC)
+    # newlib-nano (nano.specs) is the standard arm-none-eabi C library. A
+    # picolibc-based GCC (e.g. the Zephyr SDK's arm-zephyr-eabi) has no
+    # nano.specs and links its default C library (picolibc) on its own, so
+    # only request nano.specs when the compiler actually provides it.
+    execute_process(
+        COMMAND ${CMAKE_C_COMPILER} -print-file-name=nano.specs
+        OUTPUT_VARIABLE NANO_SPECS_PATH
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if (NOT NANO_SPECS_PATH STREQUAL "nano.specs")
+        add_link_options(-specs=nano.specs -specs=nosys.specs)
+    endif()
+    add_compile_definitions(CONFIG_TFM_INCLUDE_STDLIBC)
+else()
+    add_link_options(-nostdlib)
+    target_link_libraries(tfm_s_build_flags INTERFACE gcc)
+    target_link_libraries(bl2_build_flags INTERFACE gcc)
+    target_link_libraries(bl1_build_flags INTERFACE gcc)
+endif()
+
+# Macro for adding scatter files. Supports multiple files
 macro(target_add_scatter_file target)
-    target_link_options(${target}
-        PRIVATE
-        -T $<TARGET_OBJECTS:${target}_scatter>
-    )
+    target_link_options(${target} PRIVATE -T $<TARGET_OBJECTS:${target}_scatter>)
 
     add_library(${target}_scatter OBJECT)
     foreach(scatter_file ${ARGN})
-        target_sources(${target}_scatter
-            PRIVATE
-                ${scatter_file}
+        target_sources(${target}_scatter PRIVATE ${scatter_file}
         )
         # Cmake cannot use generator expressions in the
         # set_source_file_properties command, so instead we just parse the regex
@@ -154,9 +174,7 @@ macro(target_add_scatter_file target)
         )
     endforeach()
 
-    add_dependencies(${target}
-        ${target}_scatter
-    )
+    add_dependencies(${target} ${target}_scatter)
 
     set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS $<TARGET_OBJECTS:${target}_scatter>)
 
@@ -166,30 +184,32 @@ macro(target_add_scatter_file target)
         tfm_config
     )
 
-    target_compile_options(${target}_scatter
-        PRIVATE
-            -E
-            -P
-            -xc
-    )
-
-    target_compile_definitions(${target}_scatter
-        PRIVATE
-            $<$<NOT:$<BOOL:${CONFIG_GNU_LINKER_READONLY_ATTRIBUTE}>>:READONLY=>
-    )
+    target_compile_options(${target}_scatter PRIVATE -E -P -xc)
 endmacro()
 
 # Macro for converting the output *.axf file to finary files: bin, elf, hex
 macro(add_convert_to_bin_target target)
     get_target_property(bin_dir ${target} RUNTIME_OUTPUT_DIRECTORY)
+
     add_custom_target(${target}_bin
-        ALL DEPENDS ${target}
+        ALL SOURCES ${bin_dir}/${target}.bin
+        SOURCES ${bin_dir}/${target}.elf
+        SOURCES ${bin_dir}/${target}.hex
+    )
+
+    add_custom_command(OUTPUT ${bin_dir}/${target}.bin
+        OUTPUT ${bin_dir}/${target}.elf
+        OUTPUT ${bin_dir}/${target}.hex
+        DEPENDS ${target}
         COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${target}> ${bin_dir}/${target}.bin
         COMMAND ${CMAKE_OBJCOPY} -O elf32-littlearm $<TARGET_FILE:${target}> ${bin_dir}/${target}.elf
         COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${target}> ${bin_dir}/${target}.hex
     )
+
+    add_imported_target(${target}_hex ${target}_bin "${bin_dir}/${target}.hex")
 endmacro()
 
+# Set of macrots for sharing code between BL2 and RunTime, targeted for sharing MbedTLS library
 macro(target_share_symbols target)
     get_target_property(TARGET_TYPE ${target} TYPE)
     if (NOT TARGET_TYPE STREQUAL "EXECUTABLE")
@@ -244,7 +264,7 @@ macro(target_link_shared_code target)
         # ${symbol_provider}_shared_symbols - a custom target is always considered out-of-date
         # To only link when necessary, depend on ${symbol_provider} instead
         set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS $<TARGET_OBJECTS:${symbol_provider}>)
-        target_link_options(${target} PRIVATE LINKER:-R$<TARGET_FILE_DIR:${symbol_provider}>/${symbol_provider}${CODE_SHARING_INPUT_FILE_SUFFIX})
+        target_link_options(${target} PRIVATE LINKER:--just-symbols $<TARGET_FILE_DIR:${symbol_provider}>/${symbol_provider}${CODE_SHARING_INPUT_FILE_SUFFIX})
     endforeach()
 endmacro()
 

@@ -272,7 +272,9 @@ enum lcm_error_t lcm_otp_read(struct lcm_dev_t *dev, uint32_t offset, uint32_t l
                               uint8_t *buf);
 
 /**
- * \brief This function gets the state of the Debug Control Unit.
+ * \brief This function gets the state of the Debug Control Unit with neutralized
+ *  parity. The caller still needs to be aware of DCU indidces that implement parity
+ *  checks as the bit pairs are not squashed by this functions.
  *
  * \param[in]  dev    The LCM device structure.
  * \param[out] val    The buffer into which to write the value of the DCU. Must
@@ -325,10 +327,12 @@ enum lcm_error_t lcm_dcu_set_locked(struct lcm_dev_t *dev, uint8_t *val);
  * \return Returns error code as specified in \ref lcm_error_t
  */
 enum lcm_error_t lcm_dcu_get_sp_disable_mask(struct lcm_dev_t *dev, uint8_t *val);
+
 /**
- * \brief This function gets the state of the Debug Control Unit Disable Mask.
- *        This mask controls which DCU bits cannot be enabled. This mask is set
- *        in hardware
+ * \brief Retrieve the Debug Control Unit (DCU) disable mask.
+ *        Returns a constant mask that does not depend on the current DCU state.
+ *        For each DCU bit, a mask value of 0b1 indicates that clearing the
+ *        corresponding control bit (writing 0) disables that DCU.
  *
  * \param[in]  dev    The LCM device structure.
  * \param[out] val    The buffer into which to write the value of the DCU Lock.

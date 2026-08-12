@@ -10,32 +10,45 @@
 #include "tfm_hal_platform.h"
 #include "device_definition.h"
 #include "rse_attack_tracking_counter.h"
+#include "dma350_ch_drv.h"
+#include "sam_reg_map.h"
+#include "tfm_utils.h"
 
-#define ARRAY_LEN(x) (sizeof(x) / sizeof((x)[0]))
+#define ADA_DMA_TRIGGER_IN_4    0x4UL
 
 static uintptr_t get_ecc_address(const struct sam_dev_t *dev,
                                  enum rse_sam_event_id_t event)
 {
+    uint32_t vm_id;
+    uint32_t offset;
+    const uintptr_t vm_base_address[4] = {
+        VM0_BASE_S,
+        VM1_BASE_S,
+        0,
+        0,
+    };
+
     switch (event) {
     case RSE_SAM_EVENT_SRAM_PARTIAL_WRITE:
         /* Since we only have one event for all the 4 VMs, we have to iterate
          * through them.
          */
-        for (uint32_t vm_id = 0; vm_id < 4; vm_id++) {
-            uintptr_t addr = sam_get_vm_partial_write_addr(dev, vm_id);
-            if (addr != 0) {
-                return addr;
+        for (vm_id = 0; vm_id < 4; vm_id++) {
+            offset = sam_get_vm_partial_write_offset(dev, vm_id);
+            if (offset != 0) {
+                return offset + vm_base_address[vm_id];
             }
         }
         break;
+
     case RSE_SAM_EVENT_VM0_SINGLE_ECC_ERROR:
     case RSE_SAM_EVENT_VM1_SINGLE_ECC_ERROR:
     case RSE_SAM_EVENT_VM2_SINGLE_ECC_ERROR:
     case RSE_SAM_EVENT_VM3_SINGLE_ECC_ERROR:
-        return sam_get_vm_single_corrected_err_addr(
-            dev, event - RSE_SAM_EVENT_VM0_SINGLE_ECC_ERROR);
-    case RSE_SAM_EVENT_TRAM_PARITY_ERROR:
-        return sam_get_tram_single_corrected_err_addr(dev);
+        vm_id = event - RSE_SAM_EVENT_VM0_SINGLE_ECC_ERROR;
+        offset = sam_get_vm_single_corrected_err_offset(dev, vm_id);
+        return offset + vm_base_address[vm_id];
+
     default:
         break;
     }
@@ -43,25 +56,21 @@ static uintptr_t get_ecc_address(const struct sam_dev_t *dev,
     return 0;
 }
 
-/* On the fast-path attack tracking counter increment, first set the counter to
- * the incremented value. Once that is done we don't have any performance
- * constraints any more, so we can leisurely handle the outstanding SAM events
- * (which currently all don't have handlers, so just clear the events) and then
- * reset the system.
- *
- * This path deliberately minimizes latency between the event being triggered
- * and the attack counter being incremented, since it minimizes the chance that
- * an attacker can reset the system (by cutting the external power supply, since
- * the SAM events are preserved over a cold reset) and in doing so avoid
- * triggering the attack tracking counter increment.
- */
-void __NO_RETURN sam_handle_fast_attack_counter_increment(void)
+void __NO_RETURN sam_handle_nmi_event(void)
 {
     increment_attack_tracking_counter_major();
 
+    sam_clear_all_events(&SAM_DEV_S);
+
+    tfm_hal_system_reset(TFM_PLAT_SWSYN_DEFAULT);
+    __builtin_unreachable();
+}
+
+void __NO_RETURN sam_handle_critical_serverity_event(void)
+{
     sam_handle_all_events(&SAM_DEV_S);
 
-    tfm_hal_system_reset();
+    tfm_hal_system_reset(TFM_PLAT_SWSYN_DEFAULT);
     __builtin_unreachable();
 }
 
@@ -119,7 +128,6 @@ static void handle_partial_write(enum sam_event_id_t event_id)
  * latency overhead of running the SAM event checking code first.
  */
 static const sam_event_handler_t rse_handlers[RSE_SAM_EVENT_COUNT] = {
-    [RSE_SAM_EVENT_TRAM_PARITY_ERROR]       = read_and_write_address,
     [RSE_SAM_EVENT_VM0_SINGLE_ECC_ERROR]    = read_and_write_address,
     [RSE_SAM_EVENT_VM1_SINGLE_ECC_ERROR]    = read_and_write_address,
 
@@ -170,40 +178,61 @@ static const enum sam_response_t rse_responses[RSE_SAM_EVENT_COUNT] = {
     [RSE_SAM_EVENT_SACFG_PARITY_ERROR]      = SAM_RESPONSE_NMI,
     [RSE_SAM_EVENT_NSACFG_PARITY_ERROR]     = SAM_RESPONSE_NMI,
     [RSE_SAM_EVENT_INTEGRITY_CHECKER_ALARM] = SAM_RESPONSE_NMI,
+
+    [RSE_SAM_EVENT_SRAM_PARTIAL_WRITE]      = SAM_RESPONSE_SEVERE_FAULT_INTERRUPT,
+    [RSE_SAM_EVENT_VM0_SINGLE_ECC_ERROR]    = SAM_RESPONSE_SEVERE_FAULT_INTERRUPT,
+    [RSE_SAM_EVENT_VM1_SINGLE_ECC_ERROR]    = SAM_RESPONSE_SEVERE_FAULT_INTERRUPT,
+    [RSE_SAM_EVENT_VM0_DOUBLE_ECC_ERROR]    = SAM_RESPONSE_SEVERE_FAULT_INTERRUPT,
+    [RSE_SAM_EVENT_VM1_DOUBLE_ECC_ERROR]    = SAM_RESPONSE_SEVERE_FAULT_INTERRUPT,
 };
 
-static enum sam_error_t rse_enable_sam_interrupts(void)
+static void rse_enable_sam_interrupts(void)
 {
-    enum lcm_error_t lcm_err;
-    enum lcm_lcs_t lcs;
-
-    lcm_err = lcm_get_lcs(&LCM_DEV_S, &lcs);
-    if (lcm_err != LCM_ERROR_NONE) {
-        return SAM_ERROR_GENERIC_ERROR;
-    }
-
-    if (lcs != LCM_LCS_SE) {
-        /* Do not enable interrupts */
-        return SAM_ERROR_NONE;
-    }
-
     /* Enable SAM interrupts. Set SAM critical security fault to the highest
      * priority and other SAM faults to one lower priority.
      */
     NVIC_SetPriority(SAM_Critical_Sec_Fault_S_IRQn, 0);
     NVIC_SetPriority(SAM_Sec_Fault_S_IRQn, 1);
-    NVIC_SetPriority(SRAM_TRAM_ECC_Err_S_IRQn, 1);
-    NVIC_SetPriority(SRAM_ECC_Partial_Write_S_IRQn, 1);
 
     NVIC_EnableIRQ(SAM_Critical_Sec_Fault_S_IRQn);
     NVIC_EnableIRQ(SAM_Sec_Fault_S_IRQn);
-    NVIC_EnableIRQ(SRAM_TRAM_ECC_Err_S_IRQn);
-    NVIC_EnableIRQ(SRAM_ECC_Partial_Write_S_IRQn);
-
-    return SAM_ERROR_NONE;
 }
 
-uint32_t rse_sam_init(bool setup_handlers_only)
+/**
+ * @brief Software workaround to generate the SAM configuration done trigger ACK.
+ *
+ * In certain lifecycle states (e.g. CM/DM), the ADA DMA may not yet have
+ * provisioned or configured the SAM from OTP before the CPU attempts to
+ * access the SAMICV registers. This results in the SAM waiting indefinitely
+ * for a DMA ACK (sam_config_done_trig_ack) that never arrives.
+ *
+ * This function uses the DMA350 channel interface to manually generate the
+ * same ACK signal that the ADA DMA would have asserted when the SAM asserts
+ * the REQ signal, allowing SAM initialization to proceed without stalling.
+ */
+static void sam_config_done_trig_ack(void)
+{
+    /* Stop DMA Channel in case already running (e.g. residual state from DMA ICS) */
+    dma350_ch_cmd_and_wait_until_done(&DMA350_DMA0_CH0_DEV_S, DMA350_CH_CMD_STOPCMD);
+
+    /* Clear DMA Channel registers to reset channel state */
+    dma350_ch_cmd_and_wait_until_done(&DMA350_DMA0_CH0_DEV_S, DMA350_CH_CMD_CLEARCMD);
+
+    /* Configure the channel to wait for and ACK SAM trigger (Trigger IN 4) */
+    dma350_ch_set_srctriginsel(&DMA350_DMA0_CH0_DEV_S, ADA_DMA_TRIGGER_IN_4);
+    dma350_ch_set_srctrigintype(&DMA350_DMA0_CH0_DEV_S, DMA350_CH_SRCTRIGINTYPE_HW);
+
+    /* Enable source trigger so DMA can respond to SAM REQ */
+    dma350_ch_enable_source_trigger(&DMA350_DMA0_CH0_DEV_S);
+
+    /* Start the channel and wait until trigger-ACK transaction completes */
+    dma350_ch_cmd_and_wait_until_done(&DMA350_DMA0_CH0_DEV_S, DMA350_CH_CMD_ENABLECMD);
+
+    /* Clear DMA Channel registers */
+    dma350_ch_clear(&DMA350_DMA0_CH0_DEV_S);
+}
+
+uint32_t rse_sam_init(enum rse_sam_init_setup_t setup)
 {
     enum sam_error_t sam_err;
 
@@ -223,18 +252,30 @@ uint32_t rse_sam_init(bool setup_handlers_only)
         sam_clear_all_events(&SAM_DEV_S);
     }
 
-    if (!setup_handlers_only) {
-        for (uint32_t idx = 0; idx < ARRAY_LEN(rse_responses); idx++) {
+    if (setup == RSE_SAM_INIT_SETUP_FULL) {
+        /* Ensure ACK is sent only once */
+        static bool trigger_dma_ack = true;
+
+        for (uint32_t idx = 0; idx < ARRAY_SIZE(rse_responses); idx++) {
             sam_err = sam_set_event_response(&SAM_DEV_S,
                                              idx,
                                              rse_responses[idx]);
             if (sam_err != SAM_ERROR_NONE) {
                 return sam_err;
             }
+
+            /*
+             * SW mitigation: manually trigger SAM configuration done ACK once
+             * to unblock SAM FSM in CM/DM states where ADA DMA is not active.
+             */
+            if (trigger_dma_ack) {
+                sam_config_done_trig_ack();
+                trigger_dma_ack = false;
+            }
         }
     }
 
-    for (uint32_t idx = 0; idx < ARRAY_LEN(rse_handlers); idx++) {
+    for (uint32_t idx = 0; idx < ARRAY_SIZE(rse_handlers); idx++) {
         if (rse_handlers[idx] != NULL) {
             sam_err = sam_register_event_handler(&SAM_DEV_S,
                                                  idx,
@@ -257,7 +298,9 @@ uint32_t rse_sam_init(bool setup_handlers_only)
     /* Enable the SAM interrupts. At this point, all pending events will be
      * handled.
      */
-    return rse_enable_sam_interrupts();
+    rse_enable_sam_interrupts();
+
+    return SAM_ERROR_NONE;
 }
 
 void rse_sam_finish(void)
@@ -271,6 +314,4 @@ void rse_sam_finish(void)
      */
     NVIC_DisableIRQ(SAM_Critical_Sec_Fault_S_IRQn);
     NVIC_DisableIRQ(SAM_Sec_Fault_S_IRQn);
-    NVIC_DisableIRQ(SRAM_TRAM_ECC_Err_S_IRQn);
-    NVIC_DisableIRQ(SRAM_ECC_Partial_Write_S_IRQn);
 }

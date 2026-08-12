@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, Arm Limited. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -10,6 +10,10 @@
 #include "psa_manifest/pid.h"
 #include "tfm_plat_crypto_keys.h"
 #include "crypto_library.h"
+#include "tfm_log.h"
+#if defined(CC3XX_CRYPTO_OPAQUE_KEYS)
+#include "cc3xx_opaque_keys.h"
+#endif
 
 #ifndef TFM_BUILTIN_MAX_KEY_LEN
 #define TFM_BUILTIN_MAX_KEY_LEN (48)
@@ -207,7 +211,11 @@ psa_status_t tfm_builtin_key_loader_init(void)
     psa_key_type_t type;
 
     for (size_t key = 0; key < number_of_keys; key++) {
-        if (desc_table[key].lifetime != TFM_BUILTIN_KEY_LOADER_LIFETIME) {
+        if ((desc_table[key].lifetime != TFM_BUILTIN_KEY_LOADER_LIFETIME)
+#if defined(CC3XX_CRYPTO_OPAQUE_KEYS)
+            && (desc_table[key].lifetime != CC3XX_OPAQUE_KEY_LIFETIME)
+#endif
+        ) {
             /* If the key is not bound to this driver, just don't load it */
             continue;
         }
@@ -219,6 +227,8 @@ psa_status_t tfm_builtin_key_loader_init(void)
             desc_table[key].loader_key_ctx, &buf[0], TFM_BUILTIN_MAX_KEY_LEN, &key_len, &key_bits, &algorithm, &type);
 
         if (plat_err != TFM_PLAT_ERR_SUCCESS) {
+            WARN("%s: Skipping key_id %08x (owner: %d) due to %08x platform error\r\n", __func__,
+                 CRYPTO_LIBRARY_GET_KEY_ID(key_id), CRYPTO_LIBRARY_GET_OWNER(key_id), plat_err);
             continue;
         }
 
@@ -324,7 +334,7 @@ psa_status_t tfm_builtin_key_loader_get_builtin_key(
      * they all need access to the raw builtin key.
      */
     int32_t user = CRYPTO_LIBRARY_GET_OWNER(key_id);
-    if (psa_get_key_usage_flags(attributes) & PSA_KEY_USAGE_DERIVE && user != TFM_SP_CRYPTO) {
+    if ((psa_get_key_usage_flags(attributes) & PSA_KEY_USAGE_DERIVE) && (user != TFM_SP_CRYPTO)) {
 
         err = derive_subkey_into_buffer(key_slot, user,
                                         key_buffer, key_buffer_size,

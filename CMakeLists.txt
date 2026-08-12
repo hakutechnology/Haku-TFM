@@ -7,7 +7,17 @@
 
 cmake_minimum_required(VERSION 3.21)
 
+# This workaround is for long paths in TF-M under Windows issues.
+if(WIN32 AND CMAKE_VERSION VERSION_GREATER_EQUAL "VERSION 4.2.1")
+    set(CMAKE_INTERMEDIATE_DIR_STRATEGY "SHORT"  CACHE STRING
+        "Strategy for target intermediate directories.")
+endif()
+
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+
+# Optional patch of TF-M by platform code
+include(platform/ext/target/${TFM_PLATFORM}/patch.cmake OPTIONAL)
+
 include(version)
 include(remote_library)
 include(utils)
@@ -31,11 +41,25 @@ endif()
 
 include(config/post_config.cmake)
 
+include(platform/ext/target/${TFM_PLATFORM}/post_config.cmake OPTIONAL)
+
 ############################### Compiler configuration #########################
 
 include(${TFM_TOOLCHAIN_FILE})
 
 project("Trusted Firmware M" VERSION ${TFM_VERSION} LANGUAGES C CXX ASM)
+
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+    # Limit path length to avoid problems during build on Windows
+    set(CMAKE_OBJECT_PATH_MAX 240)
+
+    string(LENGTH "${CMAKE_BINARY_DIR}" CMAKE_BINARY_DIR_LEN)
+    if(CMAKE_BINARY_DIR_LEN GREATER 90)
+        message(FATAL_ERROR "CMAKE_BINARY_DIR path length (${CMAKE_BINARY_DIR_LEN}) exceeds 90 characters:\n"
+            "   \"${CMAKE_BINARY_DIR}\"\n"
+            " Please use a shorter build root path!!!")
+    endif()
+endif()
 
 add_subdirectory(lib/ext)
 
@@ -43,12 +67,18 @@ if(BL2)
     add_subdirectory(bl2)
 endif()
 
+if(PLATFORM_GPT_LIBRARY)
+    add_subdirectory(lib/gpt)
+endif()
+
 add_subdirectory(lib/backtrace)
 
+add_subdirectory(lib/efi_guid)
 add_subdirectory(lib/fih)
 add_subdirectory(lib/tfm_log)
 add_subdirectory(lib/tfm_log_unpriv)
 add_subdirectory(lib/tfm_vprintf)
+add_subdirectory(lib/tfm_helper_lib)
 add_subdirectory(tools)
 add_subdirectory(secure_fw)
 add_subdirectory(interface)

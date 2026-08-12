@@ -1,12 +1,16 @@
 /*
- * Copyright (c) 2021, Arm Limited. All rights reserved.
- * Copyright (c) 2022 Cypress Semiconductor Corporation (an Infineon
- * company) or an affiliate of Cypress Semiconductor Corporation. All rights
- * reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
  */
+
+#ifndef __INTERRUPT_H__
+#define __INTERRUPT_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
 
 #include "spm.h"
 
@@ -30,6 +34,24 @@
 const struct irq_load_info_t *get_irq_info_for_signal(
                                     const struct partition_load_info_t *p_ldinf,
                                     psa_signal_t signal);
+
+/**
+ * \brief Clear and return the ISR cookie
+ *
+ * \details In interrupt context, the backend asserts the partition's signals.
+ *          If the partition requires scheduling, the spm interrupt handler sets
+ *          a scheduling hint in the cookie.
+ *          The cookie is a leaves a trace to the PSA API to run the scheduler
+ *          for those partitions in polling mode.
+ *
+ * \retval false    There are no cookies left from ISR handling.
+ * \retval true     At least one scheduling hint was set from ISR handling in
+ *                  the cookie.
+ *                  The cookie is always cleared.
+ *
+ * \return Returns a scheduling clue
+ */
+bool tfm_get_isr_cookie(void);
 
 /**
  * \brief Entry of Secure interrupt handler. Platforms can call this function to
@@ -65,3 +87,9 @@ uint32_t tfm_flih_prepare_depriv_flih(struct partition_t *p_owner_sp,
  */
 uint32_t tfm_flih_return_to_isr(psa_flih_result_t result,
                                 struct context_flih_ret_t *p_ctx_flih_ret);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* __INTERRUPT_H__ */

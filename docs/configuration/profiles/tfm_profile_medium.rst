@@ -230,9 +230,7 @@ shown below.
    | ``CRYPTO_ASYM_ENCRYPT_MODULE_ENABLED``     | ``OFF``                                                                                             | Enable Crypto asymmetric            |
    |                                            |                                                                                                     | encryption operations               |
    +--------------------------------------------+-----------------------------------------------------------------------------------------------------+-------------------------------------+
-   | ``TFM_MBEDCRYPTO_CONFIG_PATH``             | ``${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/tfm_mbedcrypto_config_profile_medium.h`` | Mbed Crypto config file path        |
-   +--------------------------------------------+-----------------------------------------------------------------------------------------------------+-------------------------------------+
-   | ``TFM_MBEDCRYPTO_PSA_CRYPTO_CONFIG_PATH``  | ``${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/crypto_config_profile_medium.h``         | Mbed Crypto PSA config file path    |
+   | ``TFM_TF_PSA_CRYPTO_CONFIG_PATH``          | ``${CMAKE_SOURCE_DIR}/lib/ext/tf-psa-crypto/tfpsacrypto_config/crypto_config_profile_medium.h``     | TF-PSA-Crypto config file path      |
    +--------------------------------------------+-----------------------------------------------------------------------------------------------------+-------------------------------------+
    | ``TFM_PARTITION_INITIAL_ATTESTATION``      | ``ON``                                                                                              | Enable Initial Attestation service  |
    +--------------------------------------------+-----------------------------------------------------------------------------------------------------+-------------------------------------+
@@ -263,7 +261,7 @@ Will enable testing for all enabled partitions. See above for details of enabled
 partitions. Because Profile Medium enables IPC model, the IPC tests are also
 enabled.
 
-Some cryptography tests are disabled due to the reduced Mbed Crypto config.
+Some cryptography tests are disabled due to the reduced cryptographic configuration profile.
 
 .. table:: TFM options in Profile Medium top-level CMake config file
    :widths: auto
@@ -326,16 +324,14 @@ The following PSA Crypto operationts are enabled by default.
    - Key derivation
    - Key management
 
-Mbed Crypto configurations
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+TF-PSA-Crypto configurations
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-TF-M Profile Medium adds a dedicated Mbed Crypto config file
-``tfm_mbedcrypto_config_profile_medium.h`` and Mbed Crypto PSA config file
-``crypto_config_profile_medium.h`` at ``/lib/ext/mbedcrypto/mbedcrypto_config``
-folder, instead of the common one ``tfm_mbedcrypto_config_default.h`` and
+TF-M Profile Medium adds a dedicated TF-PSA-Crypto config file ``crypto_config_profile_medium.h``
+under ``/lib/ext/tf-psa-crypto/tfpsacrypto_config`` folder, instead of the common one
 ``crypto_config_default.h`` [CRYPTO-DESIGN]_.
 
-Major Mbed Crypto configurations are set as listed below:
+Major cryptographic configurations are set as listed below:
 
     - Enable SHA256
     - Enable generic message digest wrappers
@@ -351,11 +347,11 @@ Other configurations can be selected to optimize the memory footprint of Crypto
 module.
 
 A device/use case can append an extra config header to the  Profile Medium
-default Mbed Crypto config file. This can be done by setting the
-``TFM_MBEDCRYPTO_PLATFORM_EXTRA_CONFIG_PATH`` cmake variable in the platform
+default TF-PSA-Crypto config file. This can be done by setting the
+``TFM_TF_PSA_CRYPTO_PLATFORM_EXTRA_CONFIG_PATH`` cmake variable in the platform
 config file ``platform/ext<TFM_PLATFORM>/config.cmake``. This cmake variable is
-a wrapper around the ``MBEDTLS_USER_CONFIG_FILE`` options, but is preferred as
-it keeps all configuration in cmake.
+a wrapper around the ``TF_PSA_CRYPTO_USER_CONFIG_FILE`` options, but is
+preferred as it keeps all configuration in cmake.
 
 Internal Trusted Storage configurations
 ---------------------------------------
@@ -475,4 +471,6 @@ Reference
 
 --------------
 
-*Copyright (c) 2020-2022, Arm Limited. All rights reserved.*
+*SPDX-License-Identifier: BSD-3-Clause*
+
+*SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors*

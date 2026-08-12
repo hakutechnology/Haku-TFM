@@ -15,14 +15,13 @@ if(PSA_FRAMEWORK_HAS_MM_IOVEC)
                    "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
                    "  MM-IOVEC is enabled for memory and runtime optimizations for larger buffers,\n"
                    "  but reduces mitigation for common security vulnerabilities. Check FF-M v1.1\n"
-                   "  https://developer.arm.com/documentation/aes0039/latest   for more details.\n"
+                   "  https://developer.arm.com/documentation/aes0039/latest for more details.\n"
+                   "  When used with higher isolation levels, make sure the MPU is aligned correctly.\n"
                    "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
 endif()
 
 add_library(tfm_spm STATIC)
-add_library(tfm_spm_defs INTERFACE)
 add_library(tfm_boot_status INTERFACE)
-add_library(tfm_arch INTERFACE)
 
 add_dependencies(tfm_spm manifest_tool)
 
@@ -35,11 +34,14 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/tfm_version.h.in
 
 target_include_directories(tfm_spm
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/core
+        .
+        include
+        core
+        core/arch
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/boot>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/interface>
     PRIVATE
-        ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/secure_fw/include
         ${CMAKE_SOURCE_DIR}/secure_fw/partitions/lib/runtime
         ${CMAKE_BINARY_DIR}/generated
@@ -85,27 +87,11 @@ target_sources(tfm_spm
         $<$<BOOL:${TFM_MULTI_CORE_TOPOLOGY}>:${CMAKE_BINARY_DIR}/generated/interface/src/ns_mailbox_client_id.c>
 )
 
-target_include_directories(tfm_spm_defs
-    INTERFACE
-        ${CMAKE_CURRENT_SOURCE_DIR}/core
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/boot>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/interface>
-        ${CMAKE_CURRENT_SOURCE_DIR}/core/arch
-)
-
 target_link_libraries(tfm_spm
-    PUBLIC
-        tfm_arch
-        tfm_spm_defs
     PRIVATE
         platform_s
-        tfm_boot_status
-        tfm_config
         tfm_partitions
-        tfm_fih_headers
         tfm_sprt
-        $<$<NOT:$<STREQUAL:${TFM_FIH_PROFILE},OFF>>:tfm_fih>
 )
 
 target_compile_definitions(tfm_spm
@@ -123,6 +109,9 @@ target_compile_definitions(tfm_spm
         $<$<STREQUAL:${CONFIG_TFM_BRANCH_PROTECTION_FEAT},BRANCH_PROTECTION_PACRET>:BRANCH_PROTECTION_CONTROL=2>
         $<$<STREQUAL:${CONFIG_TFM_BRANCH_PROTECTION_FEAT},BRANCH_PROTECTION_PACRET_LEAF>:BRANCH_PROTECTION_CONTROL=2>
         $<$<STREQUAL:${CONFIG_TFM_BRANCH_PROTECTION_FEAT},BRANCH_PROTECTION_BTI>:BRANCH_PROTECTION_CONTROL=3>
+        $<$<BOOL:${PLATFORM_PSA_ADAC_SECURE_DEBUG}>:PLATFORM_PSA_ADAC_SECURE_DEBUG>
+        $<$<BOOL:${CONFIG_TFM_REUSE_COPY_AREA_FOR_SP_STACKS}>:CONFIG_TFM_REUSE_COPY_AREA_FOR_SP_STACKS>
+        $<$<BOOL:${TFM_TZ_REENTRANCY_CHECK}>:TFM_TZ_REENTRANCY_CHECK>
 )
 
 target_compile_options(tfm_spm
@@ -136,20 +125,13 @@ set_source_files_properties(tfm_secure_api.c
     PROPERTIES
         COMPILE_FLAGS
             $<$<C_COMPILER_ID:ARMClang>:-Wno-implicit-function-declaration>
-            $<$<C_COMPILER_ID:GNU>:-Wno-implicit-function-declaration>
+            $<$<C_COMPILER_ID:GNU,Clang>:-Wno-implicit-function-declaration>
             $<$<C_COMPILER_ID:IAR>:>
 )
 
 target_compile_definitions(tfm_config
     INTERFACE
         $<$<OR:$<BOOL:${CONFIG_TFM_SPM_BACKEND_IPC}>,$<BOOL:${CONFIG_TFM_CONNECTION_BASED_SERVICE_API}>>:CONFIG_TFM_CONNECTION_POOL_ENABLE>
-)
-
-############################ TFM arch ##########################################
-
-target_include_directories(tfm_arch
-    INTERFACE
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core/arch>
 )
 
 ############################ Boot Status #######################################

@@ -20,8 +20,10 @@ struct __attribute__((__packed__)) rse_non_secret_cm_provisioning_values_t {
     struct rse_otp_area_info_t bl1_2_area_info;
 #ifndef RSE_OTP_DM_SETS_DM_AND_DYNAMIC_AREA_SIZE
     struct rse_otp_area_info_t dm_area_info;
+#ifdef RSE_OTP_HAS_DYNAMIC_AREA
     struct rse_otp_area_info_t dynamic_area_info;
-#endif
+#endif /* RSE_OTP_HAS_DYNAMIC_AREA */
+#endif /* RSE_OTP_DM_SETS_DM_AND_DYNAMIC_AREA_SIZE */
 
     uint8_t otp_dma_ics[RSE_OTP_DMA_ICS_SIZE];
     uint32_t otp_dma_ics_size;
@@ -62,9 +64,23 @@ struct __attribute__((__packed__)) rse_secret_combined_provisioning_values_t {
 };
 #endif
 
-struct __attribute__((__packed__)) rse_non_endorsed_dm_provisioning_values_t {
-    uint32_t non_endorsed_dm_rotpk_policies;
+struct __attribute__((__packed__)) rse_rotpk_revocation_cm_provisioning_values_t {
+    uint32_t index;
+    uint32_t num_rotpks;
+    uint32_t rotpk_revocation_cm_rotpk_policies;
+    uint8_t rotpk[RSE_OTP_CM_ROTPK_AMOUNT][RSE_OTP_CM_ROTPK_SIZE];
+};
+
+struct __attribute__((__packed__)) rse_rotpk_revocation_dm_provisioning_values_t {
+    uint32_t index;
+    uint32_t num_rotpks;
+    uint32_t rotpk_revocation_dm_rotpk_policies;
     uint8_t rotpk[RSE_OTP_DM_ROTPK_AMOUNT][RSE_OTP_DM_ROTPK_SIZE];
+};
+
+struct __attribute__((packed)) rse_endorsement_certificate_provisioning_values_t {
+    uint8_t endorsement_certificate_signature[RSE_OTP_ENDORSEMENT_CERTIFICATE_SIGNATURE_SIZE];
+    uint8_t endorsement_certificate_parameters[RSE_OTP_ENDORSEMENT_CERTIFICATE_PARAMETERS_SIZE];
 };
 
 #ifdef __cplusplus

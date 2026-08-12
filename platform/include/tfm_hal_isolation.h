@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, Arm Limited. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,6 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include "config_tfm.h"
 #include "fih.h"
 #include "tfm_hal_defs.h"
 #include "load/partition_defs.h"
@@ -40,7 +41,7 @@ extern "C" {
  * \return TFM_HAL_SUCCESS - the verification passed.
  *         TFM_HAL_ERROR_GENERIC - the verification failed.
  */
-fih_int tfm_hal_verify_static_boundaries(void);
+fih_ret tfm_hal_verify_static_boundaries(void);
 
 #endif /* TFM_FIH_PROFILE_ON */
 /**
@@ -124,6 +125,18 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_bind_boundary(
  */
 FIH_RET_TYPE(bool) tfm_hal_boundary_need_switch(uintptr_t boundary_from,
                                                 uintptr_t boundary_to);
+
+#if CONFIG_TFM_PARTITION_META_DYNAMIC_ISOLATION == 1
+/**
+ * \brief  Enable Read-Write access to shared metadata section
+ */
+void tfm_hal_shared_metadata_rw_enable(void);
+
+/**
+ * \brief  Disable Read-Write access to shared metadata section (set RO)
+ */
+void tfm_hal_shared_metadata_rw_disable(void);
+#endif /* CONFIG_TFM_PARTITION_META_DYNAMIC_ISOLATION == 1 */
 
 #if CONFIG_TFM_POST_PARTITION_INIT_HOOK == 1
 /**

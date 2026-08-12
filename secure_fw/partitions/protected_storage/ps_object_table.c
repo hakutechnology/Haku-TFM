@@ -1,7 +1,5 @@
 /*
- * Copyright (c) 2018-2022, Arm Limited. All rights reserved.
- * Copyright (c) 2024 Cypress Semiconductor Corporation (an Infineon company)
- * or an affiliate of Cypress Semiconductor Corporation. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -9,6 +7,7 @@
 
 #include "ps_object_table.h"
 
+#include <assert.h>
 #include <stddef.h>
 #include <string.h>
 
@@ -21,6 +20,7 @@
 #include "ps_utils.h"
 #include "tfm_ps_defs.h"
 #include "utilities.h"
+#include "coverity_check.h"
 
 /* FIXME: Duplicated from flash info */
 #define PS_FLASH_DEFAULT_VAL 0xFFU
@@ -129,8 +129,16 @@ struct ps_obj_table_t {
  *
  * \return Returns object table index
  */
-#define PS_OBJECT_FS_ID_TO_IDX(fid) ((fid - 1) - \
-                                      PS_TABLE_FS_ID(PS_OBJ_TABLE_IDX_1))
+#define PS_OBJECT_FS_ID_TO_IDX(fid) ps_object_fs_id_to_idx(fid)
+
+static inline uint32_t ps_object_fs_id_to_idx(uint32_t fid)
+{
+    const uint32_t idx = (fid - 1) - PS_TABLE_FS_ID(PS_OBJ_TABLE_IDX_1);
+
+    assert(idx < PS_OBJ_TABLE_ENTRIES);
+
+    return idx;
+}
 
 /*!
  * \struct ps_obj_table_ctx_t
@@ -886,6 +894,7 @@ psa_status_t ps_object_table_init(uint8_t *obj_data)
 #endif /* PS_ROLLBACK_PROTECTION */
     };
 
+    TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_11_3, "Intentional pointer cast");
     init_ctx.p_table[PS_OBJ_TABLE_IDX_1] = (struct ps_obj_table_t *)obj_data;
 
     /* Read table from the file system */

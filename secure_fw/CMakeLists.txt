@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Copyright (c) 2020-2024, Arm Limited. All rights reserved.
+# SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
 # Copyright (c) 2021-2024 Cypress Semiconductor Corporation (an Infineon
 # company) or an affiliate of Cypress Semiconductor Corporation. All rights
 # reserved.
@@ -76,10 +76,9 @@ target_compile_options(tfm_s
 
 target_link_options(tfm_s
     PRIVATE
-        $<$<C_COMPILER_ID:GNU>:-Wl,-Map=${CMAKE_BINARY_DIR}/bin/tfm_s.map>
+        $<$<C_COMPILER_ID:GNU,Clang>:LINKER:-Map=${CMAKE_BINARY_DIR}/bin/tfm_s.map -Wl,--undefined=_exit>
         $<$<C_COMPILER_ID:ARMClang>:--map>
         $<$<C_COMPILER_ID:IAR>:--map\;${CMAKE_BINARY_DIR}/bin/tfm_s.map>
-        $<$<C_COMPILER_ID:Clang>:-Wl,-Map=${CMAKE_BINARY_DIR}/bin/tfm_s.map -nostdlib>
     PUBLIC
         ${LINKER_CP_OPTION}
 )
@@ -93,9 +92,8 @@ set_source_files_properties(
     ${CMAKE_SOURCE_DIR}/secure_fw/spm/core/psa_interface_thread_fn_call.c
     ${CMAKE_SOURCE_DIR}/secure_fw/spm/core/psa_interface_sfn.c
     PROPERTIES
-    COMPILE_FLAGS $<$<C_COMPILER_ID:GNU>:-Wno-unused-parameter>
+    COMPILE_FLAGS $<$<C_COMPILER_ID:GNU,Clang>:-Wno-unused-parameter>
     COMPILE_FLAGS $<$<C_COMPILER_ID:ARMClang>:-Wno-unused-parameter>
-    COMPILE_FLAGS $<$<C_COMPILER_ID:Clang>:-Wno-unused-parameter>
 )
 
 target_sources(tfm_sprt
@@ -136,6 +134,8 @@ if(CONFIG_TFM_USE_TRUSTZONE)
     )
 endif()
 
+target_link_libraries(tfm_s PRIVATE tfm_s_build_flags)
+
 ############################### CODE SHARING ###################################
 if (TFM_CODE_SHARING)
     target_link_shared_code(tfm_s
@@ -146,7 +146,7 @@ if (TFM_CODE_SHARING)
     # version of this function to attach the custom_command to the tfm_s target.
     # It's also picky about stripping the symbols, so we just make them weak
     # instead.
-    target_weaken_symbols_from_dependency(tfm_s crypto_service_mbedcrypto
+    target_weaken_symbols_from_dependency(tfm_s crypto_service_tfpsacrypto
         mbedtls_asn1*
         mbedtls_mpi*
         mbedtls_platform*

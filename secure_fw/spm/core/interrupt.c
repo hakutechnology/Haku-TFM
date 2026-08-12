@@ -1,12 +1,11 @@
 /*
- * Copyright (c) 2021-2024, Arm Limited. All rights reserved.
- * Copyright (c) 2022-2024 Cypress Semiconductor Corporation (an Infineon
- * company) or an affiliate of Cypress Semiconductor Corporation. All rights
- * reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
  */
+
+#include <stdbool.h>
 
 #include "interrupt.h"
 
@@ -23,6 +22,10 @@
 #include "load/spm_load_api.h"
 #include "ffm/backend.h"
 #include "internal_status_code.h"
+
+#if (CONFIG_TFM_SPM_BACKEND_IPC == 1) && (CONFIG_TFM_SCHEDULE_WHEN_NS_INTERRUPTED == 0)
+static bool isr_sched_hint_cookie;
+#endif
 
 #if TFM_ISOLATION_LEVEL != 1
 extern void tfm_flih_func_return(psa_flih_result_t result);
@@ -43,7 +46,7 @@ uint32_t tfm_flih_prepare_depriv_flih(struct partition_t *p_owner_sp,
     const struct partition_t *p_curr_sp;
     uintptr_t sp_base, sp_limit, curr_stack, ctx_stack;
     struct context_ctrl_t flih_ctx_ctrl;
-    fih_int fih_rc = FIH_FAILURE;
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
     FIH_RET_TYPE(bool) fih_bool;
 
     /* Come too early before runtime setup, should not happen. */
@@ -64,22 +67,29 @@ uint32_t tfm_flih_prepare_depriv_flih(struct partition_t *p_owner_sp,
         ctx_stack = p_owner_sp->thrd.p_context_ctrl->sp;
     }
 
+    /*
+     * FPU lazy stacking context preservation uses privilege and relative priorities
+     * recorded during original stacking. Thus it's important to flush FP context
+     * before boundary is changed for a new partition.
+     * Flush is always done (even if tfm_hal_boundary_need_switch returns false) to
+     * avoid issues in complex scheduling scenarios.
+     */
+    ARCH_FLUSH_FP_CONTEXT();
+
     FIH_CALL(tfm_hal_boundary_need_switch, fih_bool,
              p_curr_sp->boundary, p_owner_sp->boundary);
-    if (fih_not_eq(fih_bool, fih_int_encode(false))) {
-        /*
-         * FPU lazy stacking context preservation uses privilege and relative priorities
-         * recorded during original stacking. Thus it's important to flush FP context
-         * before boundary is changed for a new partition.
-         */
-        ARCH_FLUSH_FP_CONTEXT();
-
+    if (FIH_NOT_EQ(fih_bool,false)) {
         FIH_CALL(tfm_hal_activate_boundary, fih_rc,
                  p_owner_sp->p_ldinf, p_owner_sp->boundary);
-        if (fih_not_eq(fih_rc, fih_int_encode(TFM_HAL_SUCCESS))) {
+        if (FIH_NOT_EQ(fih_rc, TFM_HAL_SUCCESS)) {
             tfm_core_panic();
         }
     }
+
+#if (CONFIG_TFM_SECURE_THREAD_MASK_NS_INTERRUPT == 1) && defined(CONFIG_TFM_USE_TRUSTZONE)
+    /* Mask non-secure interrupts */
+    __set_BASEPRI(SECURE_THREAD_EXECUTION_PRIORITY);
+#endif
 
     /*
      * The CURRENT_COMPONENT has been stored on MSP by the SVC call, safe to
@@ -106,24 +116,26 @@ uint32_t tfm_flih_return_to_isr(psa_flih_result_t result,
     const struct partition_t *p_owner_sp;
     struct partition_t *p_prev_sp;
     FIH_RET_TYPE(bool) fih_bool;
-    fih_int fih_rc = FIH_FAILURE;
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
 
     p_prev_sp = (struct partition_t *)(p_ctx_flih_ret->state_ctx.r2);
     p_owner_sp = GET_CURRENT_COMPONENT();
 
+    /*
+     * FPU lazy stacking context preservation uses privilege and relative priorities
+     * recorded during original stacking. Thus it's important to flush FP context
+     * before boundary is changed for a new partition.
+     * Flush is always done (even if tfm_hal_boundary_need_switch returns false) to
+     * avoid issues in complex scheduling scenarios.
+     */
+    ARCH_FLUSH_FP_CONTEXT();
+
     FIH_CALL(tfm_hal_boundary_need_switch, fih_bool,
              p_owner_sp->boundary, p_prev_sp->boundary);
-    if (fih_not_eq(fih_bool, fih_int_encode(false))) {
-        /*
-         * FPU lazy stacking context preservation uses privilege and relative priorities
-         * recorded during original stacking. Thus it's important to flush FP context
-         * before boundary is changed for a new partition.
-         */
-        ARCH_FLUSH_FP_CONTEXT();
-
+    if (FIH_NOT_EQ(fih_bool,false)) {
         FIH_CALL(tfm_hal_activate_boundary, fih_rc,
                  p_prev_sp->p_ldinf, p_prev_sp->boundary);
-        if (fih_not_eq(fih_rc, fih_int_encode(TFM_HAL_SUCCESS))) {
+        if (FIH_NOT_EQ(fih_rc, TFM_HAL_SUCCESS)) {
             tfm_core_panic();
         }
     }
@@ -135,6 +147,13 @@ uint32_t tfm_flih_return_to_isr(psa_flih_result_t result,
     if (tfm_svc_thread_mode_spm_active()) {
         __set_CONTROL_nPRIV(0);
     }
+
+#if (CONFIG_TFM_SECURE_THREAD_MASK_NS_INTERRUPT == 1) && defined(CONFIG_TFM_USE_TRUSTZONE)
+    if (!tfm_svc_thread_mode_spm_active() && IS_NS_AGENT_TZ(p_prev_sp->p_ldinf)) {
+        /* NS Agent TZ veneer can be preempted by non-secure interrupt */
+        __set_BASEPRI(0);
+    }
+#endif
 
     /* Restore current component */
     SET_CURRENT_COMPONENT(p_prev_sp);
@@ -155,7 +174,7 @@ const struct irq_load_info_t *get_irq_info_for_signal(
     size_t i;
     const struct irq_load_info_t *irq_info;
 
-    if (!IS_ONLY_ONE_BIT_IN_UINT32(signal)) {
+    if ((!IS_ONLY_ONE_BIT_IN_UINT32(signal)) || (p_ldinf == NULL)) {
         return NULL;
     }
 
@@ -169,6 +188,23 @@ const struct irq_load_info_t *get_irq_info_for_signal(
     return NULL;
 }
 
+#if (CONFIG_TFM_SPM_BACKEND_IPC == 1) && (CONFIG_TFM_SCHEDULE_WHEN_NS_INTERRUPTED == 0)
+static inline void tfm_set_isr_cookie(void)
+{
+    isr_sched_hint_cookie = true;
+}
+
+bool tfm_get_isr_cookie(void)
+{
+    if (isr_sched_hint_cookie) {
+        isr_sched_hint_cookie = false;
+        return true;
+    }
+
+    return false;
+}
+#endif
+
 void spm_handle_interrupt(struct partition_t *p_pt,
                           const struct irq_load_info_t *p_ildi)
 {
@@ -176,7 +212,7 @@ void spm_handle_interrupt(struct partition_t *p_pt,
     psa_status_t ret;
     FIH_RET_TYPE(bool) fih_bool;
 
-    if (!p_pt || !p_ildi) {
+    if ((p_pt == NULL) || (p_ildi == NULL) || (p_pt->p_ldinf == NULL)) {
         tfm_core_panic();
     }
 
@@ -196,7 +232,7 @@ void spm_handle_interrupt(struct partition_t *p_pt,
 #else
         FIH_CALL(tfm_hal_boundary_need_switch, fih_bool,
                  get_spm_boundary(), p_pt->boundary);
-        if (fih_eq(fih_bool, fih_int_encode(false))) {
+        if (FIH_EQ(fih_bool, (false))) {
             flih_result = p_ildi->flih_func();
         } else {
             flih_result = tfm_flih_deprivileged_handling(
@@ -209,6 +245,17 @@ void spm_handle_interrupt(struct partition_t *p_pt,
 
     if (flih_result == PSA_FLIH_SIGNAL) {
         ret = backend_assert_signal(p_pt, p_ildi->signal);
+
+#if CONFIG_TFM_SPM_BACKEND_IPC == 1 && (CONFIG_TFM_SCHEDULE_WHEN_NS_INTERRUPTED == 0)
+        if (ret == STATUS_NEED_SCHEDULE) {
+            /*
+             * Save an isr scheduling hint in the cookie for possible later
+             * processing.
+             */
+            tfm_set_isr_cookie();
+        }
+#endif
+
         /* In SFN backend, there is only one thread, no thread switch. */
 #if CONFIG_TFM_SPM_BACKEND_SFN != 1
         if (ret == STATUS_NEED_SCHEDULE) {

@@ -17,7 +17,7 @@
 extern "C" {
 #endif /* __cplusplus */
 
-#include "stdint.h"
+#include <stdint.h>
 
 /*
  * FIH return type macro changes the function return types to fih_ret.
@@ -27,6 +27,13 @@ extern "C" {
 #define FIH_RET_TYPE(type)    fih_ret
 
 #include "bootutil/fault_injection_hardening.h"
+
+#define FIH_COND_CHECK(cond) \
+    ((cond) &&               \
+     fih_delay() &&          \
+     (!(!(cond))) &&         \
+     fih_delay() &&          \
+     (cond))
 
 #ifdef __cplusplus
 }

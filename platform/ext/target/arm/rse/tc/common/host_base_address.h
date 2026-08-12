@@ -13,8 +13,14 @@
 
 #include "platform_base_address.h"
 
-#define ALIGN_UP(num, align)    (((num) + ((align) - 1)) & ~((align) - 1))
-#define ALIGN_DOWN(num, align)  ((num) & ~((align) - 1))
+/* Do not use common definitions from tfm_utils.h, this header is included in linkerscripts */
+#ifndef ALIGN_UP
+#define ALIGN_UP(num, align)    ((num) + ((align) - ((num) % (align))) % (align))
+#endif /* ALIGN_UP */
+
+#ifndef ALIGN_DOWN
+#define ALIGN_DOWN(num, align)  ((num) - ((num) % (align)))
+#endif /* ALIGN_DOWN */
 
 #define RSE_ATU_PAGE_SIZE (0x2000U) /* 8KB */
 
@@ -43,15 +49,6 @@
                                                         PLAT_RSE_AP_SDS_SIZE, \
                                                     RSE_ATU_PAGE_SIZE)) -     \
                                           PLAT_RSE_AP_SDS_ATU_MAPPING_BASE)
-
-/* Temporary ATU mapping location. Placed directly after the last address
- * currently used for logical mapping in the RSE */
-#define TEMPORARY_ATU_MAPPING_BASE (HOST_ACCESS_BASE_S + 5 * HOST_IMAGE_MAX_SIZE)
-
-/* There is currently no single location where the ATU regions
- * are defined, so choose an arbitrary region which isn't
- * currently being used elsewhere in RSE */
-#define TEMPORARY_ATU_MAPPING_REGION_ID (10)
 
 #define RSE_ATU_AP_BASE             (0x00000000000000UL)
 #define HOST_STAGING_MEM_BASE       (RSE_ATU_AP_BASE + 0x80000000UL)

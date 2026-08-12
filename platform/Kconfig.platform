@@ -84,13 +84,39 @@ config TFM_MULTI_CORE_TOPOLOGY
     bool
     default n
     help
-      Dual-cpu architecture
+      Multi-cpu architecture
 
 config CONFIG_TFM_USE_TRUSTZONE
     bool
     default n
     help
       Enable use of TrustZone to transition between NSPE and SPE
+
+choice
+    prompt "Hybrid Platform Scheduling Type"
+    default TFM_HYBRID_PLAT_SCHED_OFF
+
+config TFM_HYBRID_PLAT_SCHED_OFF
+    bool "OFF"
+
+config TFM_HYBRID_PLAT_SCHED_SPE
+    bool "SPE"
+
+config TFM_HYBRID_PLAT_SCHED_NSPE
+    bool "NSPE"
+
+config TFM_HYBRID_PLAT_SCHED_BALANCED
+    bool "BALANCED"
+endchoice
+
+config CONFIG_TFM_HYBRID_PLAT_SCHED_TYPE
+    int
+    default 0  if TFM_HYBRID_PLAT_SCHED_OFF
+    default 10 if TFM_HYBRID_PLAT_SCHED_SPE
+    default 20 if TFM_HYBRID_PLAT_SCHED_NSPE
+    default 30 if TFM_HYBRID_PLAT_SCHED_BALANCED
+    help
+      Scheduling type can take one of the 4 values. see docs for further details
 
 ######################### Cyrpto Hardware accelerator ##########################
 config CRYPTO_HW_ACCELERATOR_CC312
@@ -181,7 +207,7 @@ config TFM_PLAT_SPECIFIC_MULTI_CORE_COMM
     depends on TFM_MULTI_CORE_TOPOLOGY
     help
       Whether to use a platform specific inter-core communication instead of
-      mailbox in dual-cpu topology
+      mailbox in multi-cpu topology
 
 config TFM_NS_NV_COUNTER_AMOUNT
     int "Numbers of NS NV counters"

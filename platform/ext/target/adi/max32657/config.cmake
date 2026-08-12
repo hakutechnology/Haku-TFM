@@ -22,6 +22,9 @@ set(TFM_PARTITION_INITIAL_ATTESTATION           ON   CACHE BOOL      "Enable Ini
 set(CONFIG_TFM_HALT_ON_CORE_PANIC               ON   CACHE BOOL      "On fatal errors in the secure firmware, halt instead of rebooting.")
 set(PLATFORM_DEFAULT_OTP                OFF          CACHE BOOL      "Use trusted on-chip flash to implement OTP memory")
 
+set(ITS_ENCRYPTION                      OFF          CACHE BOOL      "Enable authenticated encryption of ITS files using platform specific APIs")
+set(ITS_CRYPTO_AEAD_ALG                 ITS_AES_GCM  CACHE STRING    "The AEAD algorithm to use for authenticated encryption in Internal Storage")
+
 set(PLATFORM_DEFAULT_PROVISIONING       ON        CACHE BOOL      "Use default provisioning implementation")
 set(PROVISIONING_DATA_PADDED_SIZE       "0x400"   CACHE STRING    "")
 set(PROVISIONING_KEYS_CONFIG            ""        CACHE FILEPATH  "The config file which has the keys and seeds for provisioning")
@@ -30,8 +33,6 @@ set(PROVISIONING_VALUES_PADDED_SIZE     "0x400"   CACHE STRING    "")
 
 set(HAL_ADI_PATH                        "DOWNLOAD"  CACHE PATH      "Path to hal_adi (or DOWNLOAD to fetch automatically")
 set(HAL_ADI_VERSION                     "dd1c525"   CACHE STRING    "The version of hal_adi to use")
-
-set(MCUBOOT_USE_PSA_CRYPTO             ON          CACHE BOOL      "Use PSA Crypto for MCUBOOT")
 
 set(CRYPTO_HW_ACCELERATOR              ON          CACHE BOOL      "Enable hardware crypto accelerator")
 set(CRYPTO_HW_ACCELERATOR_TYPE         "adi"       CACHE STRING    "The hardware accelerator platform")

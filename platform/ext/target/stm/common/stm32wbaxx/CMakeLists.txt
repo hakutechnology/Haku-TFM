@@ -1,6 +1,6 @@
 #-------------------------------------------------------------------------------
 # SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
-# Copyright (c) 2021-2024 STMicroelectronics. All rights reserved.
+# Copyright (c) 2026 STMicroelectronics. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -56,13 +56,12 @@ target_compile_definitions(platform_s
 
 target_sources(platform_s
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/secure/system_stm32wbaxx.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/Device/Source/system_stm32wbaxx.c
         ${STM_COMMON_DIR}/hal/Native_Driver/mpu_armv8m_drv.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32wbaxx_hal.c
         ${CMAKE_CURRENT_SOURCE_DIR}/secure/low_level_device.c
         ${STM_COMMON_DIR}/hal/CMSIS_Driver/low_level_flash.c
         ${STM_COMMON_DIR}/hal/CMSIS_Driver/low_level_com.c
-        ${STM_COMMON_DIR}/hal/provision/otp_provision.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32wbaxx_hal.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32wbaxx_hal_flash.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32wbaxx_hal_flash_ex.c
@@ -83,7 +82,7 @@ target_sources(platform_s
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32wbaxx_hal_rtc.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32wbaxx_hal_icache.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32wbaxx_hal_rtc_ex.c
-        $<$<STREQUAL:"${TFM_FIH_PROFILE}","HIGH">:${PLATFORM_DIR}/ext/common/template/tfm_fih_rng.c>
+        $<$<STREQUAL:"${TFM_FIH_PROFILE}","HIGH">:${PLATFORM_DIR}/ext/common/template/tfm_fih_platform.c>
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32wbaxx_hal_hash.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32wbaxx_hal_pka.c
@@ -140,7 +139,7 @@ install(FILES
     DESTINATION ${INSTALL_PLATFORM_NS_DIR}/CMSIS_Driver
 )
 install(FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/Device/Source/Templates/system_stm32wbaxx.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Device/Source/system_stm32wbaxx.c
     DESTINATION ${INSTALL_PLATFORM_NS_DIR}/Device/Source/
 )
 
@@ -199,7 +198,7 @@ endif()
         DESTINATION ${CMAKE_INSTALL_PREFIX} )
 
 install(FILES       ${CMAKE_CURRENT_LIST_DIR}/Device/Source/startup_stm32wbaxx_ns.c
-                    ${CMAKE_CURRENT_LIST_DIR}/Device/Source/Templates/system_stm32wbaxx.c
+                    ${CMAKE_CURRENT_LIST_DIR}/Device/Source/system_stm32wbaxx.c
         DESTINATION ${INSTALL_PLATFORM_NS_DIR}/Device/Source)
 
 install(DIRECTORY   ${CMAKE_CURRENT_LIST_DIR}/hal/Inc

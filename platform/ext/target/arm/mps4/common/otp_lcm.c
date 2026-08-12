@@ -71,7 +71,7 @@ __PACKED_STRUCT plat_user_area_layout_t {
                 uint32_t iak_id[8];
                 uint32_t implementation_id[8];
                 uint32_t verification_service_url[8];
-                uint32_t profile_definition[12];
+                uint32_t profile_definition[8];
 
                 uint32_t secure_debug_pk[8];
 
@@ -741,7 +741,7 @@ static enum tfm_plat_err_t otp_write_lcs(size_t in_len, const uint8_t *in)
         return TFM_PLAT_ERR_SYSTEM_ERR;
     }
 
-    tfm_hal_system_reset();
+    tfm_hal_system_reset(TFM_PLAT_SWSYN_DEFAULT);
 
     return TFM_PLAT_ERR_SUCCESS;
 }

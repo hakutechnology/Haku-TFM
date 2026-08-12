@@ -6,6 +6,7 @@
  */
 
 #include "platform_error_codes.h"
+
 #include "fatal_error.h"
 #include "rse_provisioning_message_handler.h"
 #include "rse_provisioning_message.h"
@@ -16,7 +17,7 @@
 enum tfm_plat_err_t
 message_handling_status_report_continue(enum provisioning_message_report_step_t step)
 {
-#ifdef RSE_ENABLE_DCSU_PROVISIONING_COMMS
+#if defined(RSE_ENABLE_DCSU_PROVISIONING_COMMS) && !defined(TEST_BL1_1)
     struct provisioning_message_status_report_t status_report = {
         .type = PROVISIONING_STATUS_SUCCESS_CONTINUE,
         .report_step = step,
@@ -33,7 +34,7 @@ message_handling_status_report_continue(enum provisioning_message_report_step_t 
 enum tfm_plat_err_t
 message_handling_status_report_error(enum provisioning_message_report_step_t step, uint32_t error)
 {
-#ifdef RSE_ENABLE_DCSU_PROVISIONING_COMMS
+#if defined(RSE_ENABLE_DCSU_PROVISIONING_COMMS) && !defined(TEST_BL1_1)
     struct provisioning_message_status_report_t status_report = {
         .type = PROVISIONING_STATUS_ERROR,
         .report_step = step,
@@ -51,7 +52,7 @@ enum tfm_plat_err_t message_provisioning_finished(enum provisioning_message_repo
 {
     rse_set_provisioning_staging_status(PROVISIONING_STAGING_STATUS_NO_MESSAGE);
 
-#ifdef RSE_ENABLE_DCSU_PROVISIONING_COMMS
+#if defined(RSE_ENABLE_DCSU_PROVISIONING_COMMS) && !defined(TEST_BL1_1)
     struct provisioning_message_status_report_t status_report = {
         .type = PROVISIONING_STATUS_SUCCESS_COMPLETE,
         .report_step = step,
@@ -88,6 +89,13 @@ enum tfm_plat_err_t handle_provisioning_message(const struct rse_provisioning_me
             return TFM_PLAT_ERR_PROVISIONING_MESSAGE_NO_PLAIN_DATA_HANDLER;
         }
         return config->plain_data_handler(&msg->plain, msg->header.data_length, ctx);
+    case RSE_PROVISIONING_MESSAGE_TYPE_AUTHENTICATED_PLAIN_DATA:
+        if (config->authenticated_plain_data_handler == NULL) {
+            FATAL_ERR(TFM_PLAT_ERR_PROVISIONING_MESSAGE_NO_AUTH_PLAIN_DATA_HANDLER);
+            return TFM_PLAT_ERR_PROVISIONING_MESSAGE_NO_AUTH_PLAIN_DATA_HANDLER;
+        }
+        return config->authenticated_plain_data_handler(&msg->authenticated_plain,
+                                                        msg->header.data_length, ctx);
     case RSE_PROVISIONING_MESSAGE_TYPE_CERTIFICATE:
         if (config->cert_handler == NULL) {
             FATAL_ERR(TFM_PLAT_ERR_PROVISIONING_MESSAGE_NO_CERT_HANDLER);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, Arm Limited. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -14,12 +14,15 @@
 #include "t_cose/q_useful_buf.h"
 #ifdef TFM_PARTITION_MEASURED_BOOT
 #include "measured_boot_api.h"
-#include "boot_measurement.h"
+#include "tfm_boot_measurement.h"
 #include "psa/crypto.h"
 #endif /* TFM_PARTITION_MEASURED_BOOT */
+#include "coverity_check.h"
 
 #ifndef TFM_PARTITION_MEASURED_BOOT
-#define MAX_BOOT_STATUS 512
+#ifndef ATTEST_BOOT_STATUS_MAX_SIZE
+#define ATTEST_BOOT_STATUS_MAX_SIZE 512
+#endif /* ATTEST_BOOT_STATUS_MAX_SIZE */
 
 /*!
  * \struct attest_boot_data
@@ -31,7 +34,7 @@
  */
 struct attest_boot_data {
     struct shared_data_tlv_header header;
-    uint8_t data[MAX_BOOT_STATUS];
+    uint8_t data[ATTEST_BOOT_STATUS_MAX_SIZE];
 };
 
 /*!
@@ -71,6 +74,7 @@ get_measurement_description(psa_algorithm_t algorithm,
     case PSA_ALG_SHA_384:
         measurement_desc->ptr = "sha-384";
         measurement_desc->len = 7; /* Not including the null-terminator. */
+        break;
     case PSA_ALG_SHA_512:
         measurement_desc->ptr = "sha-512";
         measurement_desc->len = 7; /* Not including the null-terminator. */
@@ -350,8 +354,10 @@ enum psa_attest_err_t attest_boot_data_init(void)
      */
     return PSA_ATTEST_ERR_SUCCESS;
 #else
+    TFM_COVERITY_DEVIATE_BLOCK(MISRA_C_2023_Rule_11_3, "Intentional pointer cast");
     return attest_get_boot_data(TLV_MAJOR_IAS,
                                 (struct tfm_boot_data *)&boot_data,
-                                MAX_BOOT_STATUS);
+                                sizeof(boot_data));
+    TFM_COVERITY_BLOCK_END(MISRA_C_2023_Rule_11_3)
 #endif
 }

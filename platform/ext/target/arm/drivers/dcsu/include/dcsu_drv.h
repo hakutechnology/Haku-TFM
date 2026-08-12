@@ -36,6 +36,9 @@ enum dcsu_rx_command {
     DCSU_RX_COMMAND_CANCEL_IMPORT_DATA_WITH_CHECKSUM = 0xD,
     DCSU_RX_COMMAND_READ_COD_DATA = 0xE,
     DCSU_RX_COMMAND_READ_EC_PARAMS = 0xF,
+    DCSU_RX_COMMAND_SET_SE_DEV = 0x10,
+    DCSU_RX_COMMAND_SET_PS_FC = 0x11,
+    DCSU_RX_COMMAND_SET_FEATURE_CTRL = 0x12,
     _DCSU_RX_COMMAND_PAD = UINT32_MAX,
 };
 
@@ -69,7 +72,8 @@ enum dcsu_rx_msg_response_t {
     DCSU_RX_MSG_RESP_UNEXPECTED_NUMBER_OF_WORDS = 0xB,
     DCSU_RX_MSG_RESP_UNEXPECTED_IMPORT = 0xC,
     DCSU_RX_MSG_RESP_RANGE_NOT_INITIALIZED = 0xD,
-
+    DCSU_RX_MSG_RESP_INVALID_CONTROL_PARAMETER = 0x13,
+    DCSU_RX_MSG_RESP_INVALID_CONTROL_NUMBER = 0x14,
     DCSU_RX_MSG_RESP_GENERIC_ERROR = 0xFE,
     DCSU_RX_MSG_RESP_INVALID_COMMAND = 0xFF,
 
@@ -214,11 +218,12 @@ enum dcsu_error_t dcsu_poll_for_tx_response(struct dcsu_dev_t *dev);
  *        be called by an interrupt handler.
  *
  * \param[in]  dev        The DCSU device structure.
+ * \param[out] command    The command that was handled.
  *
  * \return  DCSU_ERROR_NONE if the operation has succeeded, else an
  *          error code as specified in \ref dcsu_error_t.
  */
-enum dcsu_error_t dcsu_handle_rx_command(struct dcsu_dev_t *dev);
+enum dcsu_error_t dcsu_handle_rx_command(struct dcsu_dev_t *dev, enum dcsu_rx_command *command);
 
 /**
  * \brief This function handles any pending DCSU reponse from a previous TX message.

@@ -17,6 +17,7 @@
 #include "utilities.h"
 #include "lists.h"
 #include "tfm_pools.h"
+#include "coverity_check.h"
 
 /* Magic value that indicates a pool chunk has been allocated */
 #define POOL_MAGIC_ALLOCATED UINT32_C(0xF0F0CCAA)
@@ -43,9 +44,11 @@ psa_status_t tfm_pool_init(struct tfm_pool_instance_t *pool, size_t poolsz,
     /* Chain pool chunks */
     UNI_LIST_INIT_NODE(pool, next);
 
+    TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_11_3, "Intentional pointer cast");
     pchunk = (struct tfm_pool_chunk_t *)pool->chunks;
     for (i = 0; i < num; i++) {
         UNI_LIST_INSERT_AFTER(pool, pchunk, next);
+        TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_11_3, "Intentional pointer cast");
         pchunk = (struct tfm_pool_chunk_t *)&pchunk->data[chunksz];
     }
 
@@ -60,16 +63,20 @@ void *tfm_pool_alloc(struct tfm_pool_instance_t *pool)
 {
     struct tfm_pool_chunk_t *node;
 
-    if (!pool) {
-        return NULL;
-    }
+    assert(pool != NULL);
 
     if (UNI_LIST_IS_EMPTY(pool, next)) {
         return NULL;
     }
 
     node = UNI_LIST_NEXT_NODE(pool, next);
+
+    assert(node != NULL);
+
     UNI_LIST_REMOVE_NODE(pool, node, next);
+
+    /* Trap invalid allocation */
+    assert(node->magic != POOL_MAGIC_ALLOCATED);
 
     node->magic = POOL_MAGIC_ALLOCATED;
 
@@ -83,6 +90,7 @@ void tfm_pool_free(struct tfm_pool_instance_t *pool, void *ptr)
     /* In debug builds, trap invalid frees. */
     assert(is_valid_chunk_data_in_pool(pool, ptr));
 
+    TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_11_6, "Intentional pointer cast")
     pchunk = TO_CONTAINER(ptr, struct tfm_pool_chunk_t, data);
 
     pchunk->magic = 0;
@@ -98,6 +106,10 @@ void tfm_pool_free(struct tfm_pool_instance_t *pool, void *ptr)
 bool is_valid_chunk_data_in_pool(struct tfm_pool_instance_t *pool,
                                  uint8_t *data)
 {
+    if (pool == NULL) {
+        return false;
+    }
+
     const uintptr_t chunks_start = (uintptr_t)(pool->chunks);
     const size_t chunks_offset = (uintptr_t)data - chunks_start;
     struct tfm_pool_chunk_t *pchunk;

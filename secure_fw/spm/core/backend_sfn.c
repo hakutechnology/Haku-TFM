@@ -10,7 +10,6 @@
 
 #include <stdint.h>
 #include <assert.h>
-#include "compiler_ext_defs.h"
 #include "current.h"
 #include "runtime_defs.h"
 #include "tfm_hal_platform.h"
@@ -24,6 +23,8 @@
 #include "psa/service.h"
 #include "spm.h"
 #include "memory_symbols.h"
+
+#include "compiler_ext_defs.h" /* Keep last. */
 
 /* SFN Partition state */
 #define SFN_PARTITION_STATE_NOT_INITED        0
@@ -73,6 +74,8 @@ psa_status_t backend_messaging(struct connection_t *p_connection)
 
 psa_status_t backend_replying(struct connection_t *handle, int32_t status)
 {
+    assert(handle != NULL);
+
     SET_CURRENT_COMPONENT(handle->p_client);
 
     /*
@@ -131,6 +134,10 @@ void backend_init_comp_assuredly(struct partition_t *p_pt,
 
     p_pt->p_reqs = NULL;
     p_pt->state = SFN_PARTITION_STATE_NOT_INITED;
+
+#ifdef CONFIG_TFM_REUSE_COPY_AREA_FOR_SP_STACKS
+    memset((uint8_t *)LOAD_ALLOCED_STACK_ADDR(p_pldi), 0, p_pldi->stack_size);
+#endif
 
     watermark_stack(p_pt);
 

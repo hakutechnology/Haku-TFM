@@ -157,23 +157,14 @@
 #ifdef RSE_USE_HOST_UART
 #define HOST_UART0_BASE_S                (HOST_ACCESS_BASE_S + 0xFF00000) /* UART 0 Secure base address */
 #endif /* RSE_USE_HOST_UART */
-/* ATU regions open in BL1 */
+/* ATU regions open in BL1 and BL2 */
 #define HOST_FLASH0_TEMP_BASE_S          (HOST_ACCESS_BASE_S + 2 * HOST_IMAGE_MAX_SIZE) /* Temporary address for mapping host flash areas */
-#define HOST_FLASH0_IMAGE0_BASE_S        (HOST_ACCESS_BASE_S + 3 * HOST_IMAGE_MAX_SIZE) /* Host flash image 0 input secure address */
-#define HOST_FLASH0_IMAGE1_BASE_S        (HOST_ACCESS_BASE_S + 4 * HOST_IMAGE_MAX_SIZE) /* Host flash image 1 input secure address */
-/*
- * ATU regions open in BL2
- * The output regions are defined by the subplatforms to make it possible to load
- * different images if needed.
- * The input region defines are left here because they are common.
- */
 #define HOST_FLASH0_IMAGE0_BASE_S        (HOST_ACCESS_BASE_S + 3 * HOST_IMAGE_MAX_SIZE) /* Host flash image 0 input secure address */
 #define HOST_FLASH0_IMAGE1_BASE_S        (HOST_ACCESS_BASE_S + 4 * HOST_IMAGE_MAX_SIZE) /* Host flash image 1 input secure address */
 
 /* ATU regions open at runtime */
 #define FWU_HOST_IMAGE_BASE_S            (HOST_ACCESS_BASE_S + 0 * HOST_IMAGE_MAX_SIZE) /* Region to allow writing new RSE FW images */
-#define HOST_COMMS_MAPPABLE_BASE_S       (HOST_ACCESS_BASE_S + 1 * HOST_IMAGE_MAX_SIZE) /* Region into which to map host comms pointers */
-#define HOST_SCP_COMMS_BASE_S            (HOST_ACCESS_BASE_S + 2 * HOST_IMAGE_MAX_SIZE) /* Region into which to map SCP shared memory */
+
 #ifdef TFM_PARTITION_PROTECTED_STORAGE
 #define HOST_ACCESS_PS_BASE_S            (HOST_ACCESS_BASE_S + 3 * HOST_IMAGE_MAX_SIZE) /* Region into which to map Protected Storage */
 #define HOST_ACCESS_PS_BASE_OFFSET       (HOST_ACCESS_PS_BASE_S - HOST_ACCESS_BASE_S)
@@ -196,6 +187,10 @@
 #define DTCM_SIZE                        0x00008000 /* 32 kB */
 #define HOST_ACCESS_SIZE                 0x10000000 /* 256 MB */
 #define SIC_MAPPABLE_SIZE                0x01000000 /* 16 MB */
+
+#define VM_COLD_RESET_RETAINED_SIZE      0x00020000 /* 128 KiB */
+#define VM_COLD_RESET_RETAINED_BASE_S    (VM1_BASE_S + VM1_SIZE - \
+                                         VM_COLD_RESET_RETAINED_SIZE)
 
 /* Defines for Driver MPC's */
 /* VM0 -- 8 MB */

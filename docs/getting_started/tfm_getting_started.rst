@@ -96,11 +96,12 @@ The following environments are supported:
         - Python3 `(native Windows version) <https://www.python.org/downloads/>`__ and
           the pip package manager (from Python 3.4 it's included)
 
-        3. add CMake path into environment:
+        3. add CMake and Python path into environment:
 
         .. code-block:: bash
 
             set PATH=<CMake_Path>\bin;%PATH%
+            set PATH=<python_launcher_path>;%PATH%
 
 ###########################
 Install python dependencies
@@ -119,14 +120,25 @@ dependencies.
 
             git clone https://git.trustedfirmware.org/TF-M/trusted-firmware-m.git
 
-        2. TF-M's ``tools/requirements.txt`` file declares additional Python
-           dependencies. Install them with ``pip3``:
+        2. TF-M recommends installing dependencies in a venv
 
         .. code-block:: bash
 
-            pip3 install --upgrade pip
-            cd trusted-firmware-m
-            pip3 install -r tools/requirements.txt
+            # Setup python venv for the project
+            python3 -m venv .venv
+
+            # NOTE: If your system python install version is <3.10 you can use `uv <https://docs.astral.sh/uv/getting-started/installation/#standalone-installer>` to setup your .venv
+            uv venv --python 3.12
+
+            source .venv/bin/activate
+            cd </trusted-firmware-m>
+            # `-e` installs modules and scripts in editable/development mode
+            pip install -e .
+
+            # NOTE: If you've used `uv` to setup your `.venv`, prepend the `pip` commands with `uv`
+            # `-e` installs modules and scripts in editable/development mode
+            uv pip install -e .
+
 
     .. group-tab:: Windows
 
@@ -136,13 +148,24 @@ dependencies.
 
             git clone https://git.trustedfirmware.org/TF-M/trusted-firmware-m.git
 
-        2. TF-M's ``tools/requirements.txt`` file declares additional Python
-           dependencies. Install them with ``pip3``:
+        2. TF-M recommends installing dependencies in a venv
 
         .. code-block:: bash
 
-            cd trusted-firmware-m
-            pip3 install -r tools\requirements.txt
+            # Setup python venv for the project
+            python3 -m venv .venv
+
+            # NOTE: If your system python install version is <3.10 you can use `uv <https://docs.astral.sh/uv/getting-started/installation/#standalone-installer>` to setup your .venv
+            uv venv --python 3.12
+
+            .venv\Scripts\activate.bat
+            cd <\trusted-firmware-m>
+            # `-e` installs modules and scripts in editable/development mode
+            pip install -e .
+
+            # NOTE: If you've used `uv` to setup your `.venv`, prepend the `pip` commands with `uv`
+            # `-e` installs modules and scripts in editable/development mode
+            uv pip install -e .
 
 ###################
 Install a toolchain
@@ -152,103 +175,120 @@ To compile TF-M code, at least one of the supported compiler toolchains have to
 be available in the build environment. The currently supported compiler
 versions are:
 
-    - Arm Compiler minimum version v6.21
+****************************
+Arm Compiler (minimum v6.21)
+****************************
+.. tabs::
 
-      .. tabs::
+    .. group-tab:: Linux
 
-          .. group-tab:: Linux
+        - Download the standalone packages from `here <https://developer.arm.com/products/software-development-tools/compilers/arm-compiler/downloads/version-6>`__.
+        - Add Arm Compiler into environment:
 
-              - Download the standalone packages from `here <https://developer.arm.com/products/software-development-tools/compilers/arm-compiler/downloads/version-6>`__.
-              - Add Arm Compiler into environment:
+        .. code-block:: bash
 
-                .. code-block:: bash
+            export PATH=<ARM_CLANG_PATH>/bin:$PATH
+            export ARM_PRODUCT_PATH=<ARM_CLANG_PATH>/sw/mappings
 
-                    export PATH=<ARM_CLANG_PATH>/bin:$PATH
-                    export ARM_PRODUCT_PATH=<ARM_CLANG_PATH>/sw/mappings
+        - Configure proper tool variant and license.
 
-              - Configure proper tool variant and license.
+    .. group-tab:: Windows
 
-          .. group-tab:: Windows
+        - Download the standalone packages from `here <https://developer.arm.com/products/software-development-tools/compilers/arm-compiler/downloads/version-6>`__.
+        - Add Arm Compiler into environment:
 
-              - Download the standalone packages from `here <https://developer.arm.com/products/software-development-tools/compilers/arm-compiler/downloads/version-6>`__.
-              - Add Arm Compiler into environment:
+        .. code-block:: bash
 
-                .. code-block:: bash
+            set PATH=<ARM_CLANG_PATH>\bin;%PATH%
+            set ARM_PRODUCT_PATH=<ARM_CLANG_PATH>\sw\mappings
 
-                    set PATH=<ARM_CLANG_PATH>\bin;%PATH%
-                    set ARM_PRODUCT_PATH=<ARM_CLANG_PATH>\sw\mappings
+        - Configure proper tool variant and license.
 
-              - Configure proper tool variant and license.
+.. note::
 
-    - GNU Arm compiler version minimum 10.3.2021.10
+    When compiling for a Cortex-M52 target, a Cortex-M85 target, or with an
+    -mcpu=<name> option that includes the **+pacbti** feature modifier,
+    and when configured without *User based* Licensing, the compiler
+    could incorrectly report one of these errors:
 
-      .. tabs::
+    * ``Cortex-M52 is not available with the current toolkit edition and license``
+    * ``Cortex-M85 is not available with the current toolkit edition and license``
 
-          .. group-tab:: Linux
+    The use of -target-feature **+pacbti** is disallowed in this variant of Armclang.
+    Please use Armclang version 6.24+ which does not have this issue.
 
-              - Download the GNU Arm compiler from `here <https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads>`__.
-              - Add GNU Arm into environment:
+*************************************
+GNU Arm compiler (minimum v12.2.Rel1)
+*************************************
+.. tabs::
 
-                .. code-block:: bash
+    .. group-tab:: Linux
 
-                    export PATH=<GNU_ARM_PATH>/bin:$PATH
+        - Download the GNU Arm compiler from `here <https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads>`__.
+        - Add GNU Arm into environment:
 
-          .. group-tab:: Windows
+        .. code-block:: bash
 
-              - Download the GNU Arm compiler from `here <https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads>`__.
-              - Add GNU Arm into environment:
+            export PATH=<GNU_ARM_PATH>/bin:$PATH
 
-                .. code-block:: bash
+    .. group-tab:: Windows
 
-                    set PATH=<GNU_ARM_PATH>\bin;%PATH%
+        - Download the GNU Arm compiler from `here <https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads>`__.
+        - Add GNU Arm into environment:
 
-    - IAR Arm compiler v9.30.1
+        .. code-block:: bash
 
-      .. tabs::
+            set PATH=<GNU_ARM_PATH>\bin;%PATH%
 
-          .. group-tab:: Linux
+**********************************
+IAR Arm compiler (minimum v9.30.1)
+**********************************
+.. tabs::
 
-              - Download IAR build tools from `here <https://www.iar.com/embedded-development-tools/iar-build-tools>`__.
-              - Add IAR Arm compiler into environment:
+    .. group-tab:: Linux
 
-                .. code-block:: bash
+        - Download IAR build tools from `here <https://www.iar.com/embedded-development-tools/iar-build-tools>`__.
+        - Add IAR Arm compiler into environment:
 
-                    export PATH=<IAR_COMPILER_PATH>/bin:$PATH
+        .. code-block:: bash
 
-          .. group-tab:: Windows
+            export PATH=<IAR_COMPILER_PATH>/bin:$PATH
 
-              - Download IAR build tools from `here <https://www.iar.com/embedded-development-tools/iar-build-tools>`__.
-              - Add IAR Arm compiler into environment:
+    .. group-tab:: Windows
 
-                .. code-block:: bash
+        - Download IAR build tools from `here <https://www.iar.com/embedded-development-tools/iar-build-tools>`__.
+        - Add IAR Arm compiler into environment:
 
-                    set PATH=<IAR_COMPILER_PATH>\bin;%PATH%
+        .. code-block:: bash
 
-    - LLVM Embedded Toolchain for Arm v18.1.3+
+            set PATH=<IAR_COMPILER_PATH>\bin;%PATH%
 
-      .. tabs::
+********************************************
+Arm Toolchain for Embedded (minimum v20.1.0)
+********************************************
+.. tabs::
 
-          .. group-tab:: Linux
+    .. group-tab:: Linux
 
-              - Download the LLVM Embedded Toolchain for Arm from `here <https://github.com/ARM-software/LLVM-embedded-toolchain-for-Arm>`__.
-              - Add LLVM Embedded into environment:
+        - Download the Arm Toolchain for Embedded (ATfE) from `here <https://github.com/arm/arm-toolchain/releases>`__.
+        - Add ATfE into environment:
 
-                .. code-block:: bash
+        .. code-block:: bash
 
-                    export PATH=<LLVM_PATH>/bin:$PATH
+            export PATH=<ATFE_PATH>/bin:$PATH
 
-          .. group-tab:: Windows
+    .. group-tab:: Windows
 
-              - Download the LLVM Embedded Toolchain for Arm from `here <https://github.com/ARM-software/LLVM-embedded-toolchain-for-Arm>`__.
-              - Add LLVM Embedded into environment:
+        - Download the Arm Toolchain for Embedded from `here <https://github.com/arm/arm-toolchain/releases>`__.
+        - Add ATfE into environment:
 
-                .. code-block:: bash
+        .. code-block:: bash
 
-                    set PATH=<LLVM_PATH>\bin;%PATH%
+            set PATH=<ATFE_PATH>\bin;%PATH%
 
-      .. note::
+.. note::
 
-          Not all platforms support this toolchain. Please refer to a platform documentation or check with the platform owner.
+    Not all platforms support this toolchain. Please refer to a platform documentation or check with the platform owner.
 
 #############################
 Build AN521 regression sample
@@ -274,7 +314,7 @@ as an example:
             cd </tf-m-tests/tests_reg>
             cmake -S spe -B build_spe -DTFM_PLATFORM=arm/mps2/an521 -DCONFIG_TFM_SOURCE_PATH=<TF-M source dir absolute path> \
                   -DCMAKE_BUILD_TYPE=Debug -DTFM_TOOLCHAIN_FILE=<TF-M source dir absolute path>/toolchain_GNUARM.cmake \
-                  -DTEST_S=ON -DTEST_NS=ON \
+                  -DTEST_S=ON -DTEST_NS=ON
             cmake --build build_spe -- install
 
             cmake -S . -B build_test -DCONFIG_SPE_PATH=<tf-m-tests absolute path>/tests_reg/build_spe/api_ns \
@@ -285,7 +325,7 @@ as an example:
 
         .. important::
             Use "/" instead of "\\" when assigning Windows paths to CMAKE
-            variables, for example, use "c:/build" instead of "c:\\\\build".
+            variables, for example, use "c:/build" instead of "c:\\\build".
 
         Get the TF-M tests source code:
 
@@ -297,10 +337,10 @@ as an example:
 
         .. code-block:: bash
 
-            cd </tf-m-tests/tests_reg>
+            cd <\tf-m-tests\tests_reg>
             cmake -G"Unix Makefiles" -S spe -B build_spe -DTFM_PLATFORM=arm/mps2/an521 -DCONFIG_TFM_SOURCE_PATH=<TF-M source dir absolute path> \
                   -DCMAKE_BUILD_TYPE=Debug -DTFM_TOOLCHAIN_FILE=<TF-M source dir absolute path>/toolchain_GNUARM.cmake \
-                  -DTEST_S=ON -DTEST_NS=ON \
+                  -DTEST_S=ON -DTEST_NS=ON
             cmake --build build_spe -- install
 
             cmake -G"Unix Makefiles" -S . -B build_test -DCONFIG_SPE_PATH=<tf-m-tests absolute path>/tests_reg/build_spe/api_ns \
@@ -329,7 +369,7 @@ Arm Development Studio.
 
     .. group-tab:: Linux
 
-        1. install Arm Development Studio to get the fast-model.
+        1. Install Arm Development Studio to get the fast-model.
 
            Download Arm Development Studio from `here <https://developer.arm.com/Tools%20and%20Software/Arm%20Development%20Studio#Downloads>`__.
 
@@ -371,7 +411,7 @@ Arm Development Studio.
 
     .. group-tab:: Windows
 
-        1. install Arm Development Studio to get the fast-model.
+        1. Install Arm Development Studio to get the fast-model.
 
            Download Arm Development Studio from `here <https://developer.arm.com/Tools%20and%20Software/Arm%20Development%20Studio#Downloads>`__.
 
@@ -434,8 +474,8 @@ To build the TF-M firmware the following tools are needed:
    - CMake version 3.21 or later
    - Git
    - gmake, aka GNU Make
-   - Python v3.x
-   - a set of python modules listed in ``tools/requirements.txt``
+   - Python >=v3.11
+   - [Optionally] `uv <https://docs.astral.sh/uv/getting-started/installation/#standalone-installer>`__
 
 ****************
 Dependency chain

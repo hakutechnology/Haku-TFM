@@ -26,5 +26,13 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_post_partition_init_hook(void)
 
     secctrl->cpuseccfg = cpuseccfg_val;
 
-    FIH_RET(fih_int_encode(TFM_HAL_SUCCESS));
+    FIH_RET(TFM_HAL_SUCCESS);
 }
+
+#ifdef TFM_FIH_PROFILE_ON
+/* This function is responsible for checking all critical isolation configurations. */
+fih_ret tfm_hal_verify_static_boundaries(void)
+{
+    FIH_RET(FIH_SUCCESS);
+}
+#endif /* TFM_FIH_PROFILE_ON */

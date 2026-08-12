@@ -1,12 +1,9 @@
 /*
- * Copyright (c) 2021-2024, Arm Limited. All rights reserved.
- *
  * SPDX-License-Identifier: BSD-3-Clause
- *
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  */
 
 #include <stdint.h>
-#include "compiler_ext_defs.h"
 #include "config_spm.h"
 #include "ffm/psa_api.h"
 #include "spm.h"
@@ -17,6 +14,9 @@
 #include "psa/service.h"
 #include "runtime_defs.h"
 #include "tfm_arch.h"
+#include "coverity_check.h"
+
+#include "compiler_ext_defs.h" /* Keep last. */
 
 #if defined(__ICCARM__)
 #pragma required = tfm_arch_thread_fn_call
@@ -109,11 +109,18 @@ void psa_clear_thread_fn_call(void)
 }
 #endif /* CONFIG_TFM_DOORBELL_API == 1 */
 
-__naked
-void psa_panic_thread_fn_call(void)
+/* Suppress false positive Pe1305 (no_return function should not return) for IAR */
+#if defined(__ICCARM__)
+#pragma diag_suppress=Pe1305
+#endif
+TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_17_9, "psa_panic_thread_fn_call is no return function")
+__naked __NO_RETURN void psa_panic_thread_fn_call(void)
 {
     TFM_THREAD_FN_CALL_ENTRY(tfm_spm_partition_psa_panic);
 }
+#if defined(__ICCARM__)
+#pragma diag_default=Pe1305
+#endif
 
 __naked
 uint32_t psa_rot_lifecycle_state_thread_fn_call(void)

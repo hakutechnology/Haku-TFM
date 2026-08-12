@@ -1,0 +1,120 @@
+From 5ae5f7623e5d13577549bd2d8fb2bd8d68f75326 Mon Sep 17 00:00:00 2001
+From: Hugues KAMBA MPIANA <hugueskambampiana@arm.com>
+Date: Fri, 8 May 2026 11:32:41 +0100
+Subject: [PATCH] Allow transparent fallback for runtime CC3XX
+
+Let the generic PSA driver wrappers treat CC3XX like any other
+transparent accelerator by only short-circuiting on statuses other than
+PSA_ERROR_NOT_SUPPORTED.
+
+This keeps the runtime-specific policy out of the wrapper layer so the
+CC3XX driver can decide when transparent operations should fall back to
+p256-m or builtin software implementations.
+
+Signed-off-by: Hugues KAMBA MPIANA <hugueskambampiana@arm.com>
+---
+ core/psa_crypto_driver_wrappers.h           | 24 ++++++++++++++-------
+ core/psa_crypto_driver_wrappers_no_static.c |  3 ++-
+ 2 files changed, 18 insertions(+), 9 deletions(-)
+
+diff --git a/core/psa_crypto_driver_wrappers.h b/core/psa_crypto_driver_wrappers.h
+index 2e67ed93a..cfb961c6a 100644
+--- a/core/psa_crypto_driver_wrappers.h
++++ b/core/psa_crypto_driver_wrappers.h
+@@ -195,7 +195,8 @@ static inline psa_status_t psa_driver_wrapper_sign_message(
+                         signature,
+                         signature_size,
+                         signature_length );
+-            return( status );
++            if( status != PSA_ERROR_NOT_SUPPORTED )
++                return( status );
+ #endif /* PSA_CRYPTO_DRIVER_CC3XX */
+ #endif /* PSA_CRYPTO_ACCELERATOR_DRIVER_PRESENT */
+ #if defined(TF_PSA_CRYPTO_PQCP_MLDSA_ENABLED)
+@@ -516,7 +517,8 @@ static inline psa_status_t psa_driver_wrapper_verify_message(
+                         input_length,
+                         signature,
+                         signature_length );
+-            return( status );
++            if( status != PSA_ERROR_NOT_SUPPORTED )
++                return( status );
+ #endif /* PSA_CRYPTO_DRIVER_CC3XX */
+ #endif /* PSA_CRYPTO_ACCELERATOR_DRIVER_PRESENT */
+ 
+@@ -827,7 +829,8 @@ static inline psa_status_t psa_driver_wrapper_sign_hash(
+                                       signature,
+                                       signature_size,
+                                       signature_length );
+-            return( status );
++            if( status != PSA_ERROR_NOT_SUPPORTED )
++                return( status );
+ #endif /* PSA_CRYPTO_DRIVER_CC3XX */
+ #if defined (MBEDTLS_PSA_P256M_DRIVER_ENABLED)
+             if( PSA_KEY_TYPE_IS_ECC( psa_get_key_type(attributes) ) &&
+@@ -924,7 +927,8 @@ static inline psa_status_t psa_driver_wrapper_verify_hash(
+                                         hash_length,
+                                         signature,
+                                         signature_length );
+-            return( status );
++            if( status != PSA_ERROR_NOT_SUPPORTED )
++                return( status );
+ #endif /* PSA_CRYPTO_DRIVER_CC3XX */
+ #if defined (MBEDTLS_PSA_P256M_DRIVER_ENABLED)
+             if( PSA_KEY_TYPE_IS_ECC( psa_get_key_type(attributes) ) &&
+@@ -1301,7 +1305,8 @@ static inline psa_status_t psa_driver_wrapper_generate_key(
+                 status = cc3xx_generate_key(
+                     attributes, key_buffer, key_buffer_size,
+                     key_buffer_length );
+-                break;
++                if( status != PSA_ERROR_NOT_SUPPORTED )
++                    break;
+ #endif /* PSA_CRYPTO_DRIVER_CC3XX */
+ #if defined(MBEDTLS_PSA_P256M_DRIVER_ENABLED)
+                 if( PSA_KEY_TYPE_IS_ECC( psa_get_key_type(attributes) ) &&
+@@ -2647,7 +2652,8 @@ static inline psa_status_t psa_driver_wrapper_aead_encrypt_setup(
+                     attributes, key_buffer, key_buffer_size,
+                     alg );
+ 
+-            return( status );
++            if( status != PSA_ERROR_NOT_SUPPORTED )
++                return( status );
+ #endif /* PSA_CRYPTO_DRIVER_CC3XX */
+ #endif /* PSA_CRYPTO_ACCELERATOR_DRIVER_PRESENT */
+ 
+@@ -2718,7 +2724,8 @@ static inline psa_status_t psa_driver_wrapper_aead_decrypt_setup(
+                     key_buffer, key_buffer_size,
+                     alg );
+ 
+-            return( status );
++            if( status != PSA_ERROR_NOT_SUPPORTED )
++                return( status );
+ #endif /* PSA_CRYPTO_DRIVER_CC3XX */
+ #endif /* PSA_CRYPTO_ACCELERATOR_DRIVER_PRESENT */
+ 
+@@ -3667,7 +3674,8 @@ static inline psa_status_t psa_driver_wrapper_key_agreement(
+                                           shared_secret_size,
+                                           shared_secret_length,
+                                           alg );
+-            return( status );
++            if( status != PSA_ERROR_NOT_SUPPORTED )
++                return( status );
+ #endif /* PSA_CRYPTO_DRIVER_CC3XX */
+ #if defined(MBEDTLS_PSA_P256M_DRIVER_ENABLED)
+             if( PSA_KEY_TYPE_IS_ECC( psa_get_key_type(attributes) ) &&
+diff --git a/core/psa_crypto_driver_wrappers_no_static.c b/core/psa_crypto_driver_wrappers_no_static.c
+index 68163c333..ae7b71173 100644
+--- a/core/psa_crypto_driver_wrappers_no_static.c
++++ b/core/psa_crypto_driver_wrappers_no_static.c
+@@ -189,7 +189,8 @@ psa_status_t psa_driver_wrapper_export_public_key(
+                          data,
+                          data_size,
+                          data_length );
+-            return( status );
++            if( status != PSA_ERROR_NOT_SUPPORTED )
++                return( status );
+ #endif /* PSA_CRYPTO_DRIVER_CC3XX */
+ 
+ #if (defined(MBEDTLS_PSA_P256M_DRIVER_ENABLED) )
+-- 
+2.34.1
+

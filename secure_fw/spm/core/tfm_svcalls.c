@@ -9,10 +9,12 @@
 #include <stdint.h>
 #include "aapcs_local.h"
 #include "config_spm.h"
+#include "current.h"
 #include "interrupt.h"
 #include "internal_status_code.h"
 #include "memory_symbols.h"
 #include "spm.h"
+#include "coverity_check.h"
 #include "svc_num.h"
 #include "tfm_arch.h"
 #include "tfm_svcalls.h"
@@ -76,20 +78,35 @@ static const psa_api_svc_func_t psa_api_svc_func_table[] = {
     (psa_api_svc_func_t)tfm_spm_agent_psa_call,
     (psa_api_svc_func_t)tfm_spm_agent_psa_connect,
     (psa_api_svc_func_t)tfm_spm_agent_psa_close,
+#if PSA_FRAMEWORK_HAS_MM_IOVEC == 1
+    (psa_api_svc_func_t)tfm_spm_partition_psa_map_invec,
+    (psa_api_svc_func_t)tfm_spm_partition_psa_unmap_invec,
+    (psa_api_svc_func_t)tfm_spm_partition_psa_map_outvec,
+    (psa_api_svc_func_t)tfm_spm_partition_psa_unmap_outvec,
+#endif
 };
 
 static uint32_t thread_mode_spm_return(uint32_t result)
 {
-    fih_int fih_rc = FIH_FAILURE;
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
     FIH_RET_TYPE(bool) fih_bool;
     const struct partition_t *p_part_next = GET_CURRENT_COMPONENT();
     struct tfm_state_context_t *p_tctx = (struct tfm_state_context_t *)saved_psp;
 
+    /*
+     * FPU lazy stacking context preservation uses privilege and relative priorities
+     * recorded during original stacking. Thus it's important to flush FP context
+     * before boundary is changed for a new partition.
+     * Flush is always done (even if tfm_hal_boundary_need_switch returns false) to
+     * avoid issues in complex scheduling scenarios.
+     */
+    ARCH_FLUSH_FP_CONTEXT();
+
     FIH_CALL(tfm_hal_boundary_need_switch, fih_bool, get_spm_boundary(), p_part_next->boundary);
-    if (fih_not_eq(fih_bool, fih_int_encode(false))) {
+    if (FIH_NOT_EQ(fih_bool, false)) {
         FIH_CALL(tfm_hal_activate_boundary, fih_rc,
                  p_part_next->p_ldinf, p_part_next->boundary);
-        if (fih_not_eq(fih_rc, fih_int_encode(TFM_HAL_SUCCESS))) {
+        if (FIH_NOT_EQ(fih_rc, TFM_HAL_SUCCESS)) {
             tfm_core_panic();
         }
     }
@@ -103,6 +120,13 @@ static uint32_t thread_mode_spm_return(uint32_t result)
 
     /* Invalidate saved_psp */
     saved_psp = INVALID_PSP_VALUE;
+
+#if (CONFIG_TFM_SECURE_THREAD_MASK_NS_INTERRUPT == 1) && defined(CONFIG_TFM_USE_TRUSTZONE)
+    if (IS_NS_AGENT_TZ(p_part_next->p_ldinf)) {
+        /* NS Agent TZ veneer can be preempted by non-secure interrupt */
+        __set_BASEPRI(0);
+    }
+#endif
 
     return saved_exc_return;
 }
@@ -142,7 +166,7 @@ static void init_spm_func_context(psa_api_svc_func_t svc_func, uint32_t *ctx)
 
 static int32_t prepare_to_thread_mode_spm(uint8_t svc_number, uint32_t *ctx, uint32_t exc_return)
 {
-    fih_int fih_rc = FIH_FAILURE;
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
     FIH_RET_TYPE(bool) fih_bool;
     const struct partition_t *p_curr_sp;
     psa_api_svc_func_t svc_func = NULL;
@@ -168,11 +192,20 @@ static int32_t prepare_to_thread_mode_spm(uint8_t svc_number, uint32_t *ctx, uin
 
     saved_exc_return = exc_return;
 
+    /*
+     * FPU lazy stacking context preservation uses privilege and relative priorities
+     * recorded during original stacking. Thus it's important to flush FP context
+     * before boundary is changed for a new partition.
+     * Flush is always done (even if tfm_hal_boundary_need_switch returns false) to
+     * avoid issues in complex scheduling scenarios.
+     */
+    ARCH_FLUSH_FP_CONTEXT();
+
     p_curr_sp = GET_CURRENT_COMPONENT();
     FIH_CALL(tfm_hal_boundary_need_switch, fih_bool, p_curr_sp->boundary, get_spm_boundary());
-    if (fih_not_eq(fih_bool, fih_int_encode(false))) {
+    if (FIH_NOT_EQ(fih_bool, false)) {
         FIH_CALL(tfm_hal_activate_boundary, fih_rc, NULL, get_spm_boundary());
-        if (fih_not_eq(fih_rc, fih_int_encode(TFM_HAL_SUCCESS))) {
+        if (FIH_NOT_EQ(fih_rc, TFM_HAL_SUCCESS)) {
             tfm_core_panic();
         }
     }
@@ -180,6 +213,11 @@ static int32_t prepare_to_thread_mode_spm(uint8_t svc_number, uint32_t *ctx, uin
     init_spm_func_context(svc_func, ctx);
 
     ctx[0] = (uint32_t)PSA_SUCCESS;
+
+#if (CONFIG_TFM_SECURE_THREAD_MASK_NS_INTERRUPT == 1) && defined(CONFIG_TFM_USE_TRUSTZONE)
+    /* Mask non-secure interrupts */
+    __set_BASEPRI(SECURE_THREAD_EXECUTION_PRIORITY);
+#endif
 
     return EXC_RETURN_THREAD_PSP;
 }
@@ -195,12 +233,13 @@ static uint32_t handle_spm_svc_requests(uint32_t svc_number, uint32_t exc_return
 {
 #if TFM_SP_LOG_RAW_ENABLED
     struct partition_t *curr_partition;
-    fih_int fih_rc = FIH_FAILURE;
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
 #endif
 
     switch (svc_number) {
     case TFM_SVC_SPM_INIT:
         exc_return = tfm_spm_init();
+        TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_2_2, "Parameters can be changed by user and this code will make effect")
         tfm_arch_check_msp_sealing();
         /* The following call does not return */
         tfm_arch_free_msp_and_exc_ret(SPM_BOOT_STACK_BOTTOM, exc_return);
@@ -225,7 +264,7 @@ static uint32_t handle_spm_svc_requests(uint32_t svc_number, uint32_t exc_return
         curr_partition = GET_CURRENT_COMPONENT();
         FIH_CALL(tfm_hal_memory_check, fih_rc, curr_partition->boundary, (uintptr_t)svc_args[0],
                 svc_args[1], TFM_HAL_ACCESS_READABLE);
-        if (fih_eq(fih_rc, fih_int_encode(PSA_SUCCESS))) {
+        if (FIH_EQ(fih_rc, PSA_SUCCESS)) {
             svc_args[0] = tfm_hal_output_spm_log((const char *)svc_args[0], svc_args[1]);
         } else {
             tfm_core_panic();

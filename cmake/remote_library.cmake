@@ -140,13 +140,16 @@ function(fetch_remote_library)
     file(GLOB PATCH_FILES ${ARG_LIB_PATCH_DIR}/*.patch LIST_DIRECTORIES true)
 
     if(PATCH_FILES)
-        set(PATCH_COMMAND PATCH_COMMAND ${GIT_EXECUTABLE} am --ignore-date ${PATCH_FILES})
+        set(PATCH_COMMAND PATCH_COMMAND ${GIT_EXECUTABLE}
+            -c user.email=tf-m@noreply.local
+            -c user.name=TFM
+            am --ignore-date ${PATCH_FILES})
     endif()
 
     # Content fetching
     FetchContent_Declare(${ARG_LIB_NAME}
         ${ARG_FETCH_CONTENT_ARGS}
-        "${GIT_SUBMODULES}"      "${GIT_SUBMODULES_VALUE}"
+        ${GIT_SUBMODULES}     ${GIT_SUBMODULES_VALUE}
         ${PATCH_COMMAND}
     )
     FetchContent_MakeAvailable(${ARG_LIB_NAME})

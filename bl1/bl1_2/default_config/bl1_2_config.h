@@ -26,6 +26,7 @@
 /* #define TFM_BL1_2_EMBED_ROTPK_IN_IMAGE */
 /* #define TFM_BL1_2_IMAGE_ENCRYPTION */
 /* #define TFM_BL1_2_ENABLE_ROTPK_POLICIES */
+/* #define TFM_BL1_2_IMAGE_BINDING */
 
 /* #define TFM_BL1_2_ENABLE_LMS */
 /* #define TFM_BL1_2_ENABLE_ECDSA */
@@ -45,8 +46,9 @@
 #define TFM_BL1_2_MEASUREMENT_HASH_MAX_SIZE 48
 #endif
 
+/* This must be at minimum 0x100-byte aligned */
 #ifndef TFM_BL1_2_HEADER_MAX_SIZE
-#define TFM_BL1_2_HEADER_MAX_SIZE 0xC80
+#define TFM_BL1_2_HEADER_MAX_SIZE 0xD00
 #endif
 
 #endif /* __BL1_2_CONFIG_H__ */

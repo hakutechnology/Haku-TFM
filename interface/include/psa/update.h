@@ -20,6 +20,11 @@
 #include "psa/fwu_config.h"
 #endif
 #include "tfm_fwu_defs.h"
+#ifdef FWU_DEVICE_IMPL_INFO_DEF_FILE
+#include FWU_DEVICE_IMPL_INFO_DEF_FILE
+#else
+#include "tfm_fwu_impl_info.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -74,14 +79,10 @@ typedef uint8_t psa_fwu_component_t;
  * @brief Version information about a firmware image.
  */
 typedef struct psa_fwu_image_version_t {
-    /* The major version of an image. */
-    uint8_t major;
-    /* The minor version of an image. */
-    uint8_t minor;
-    /* The revision or patch version of an image. */
-    uint16_t patch;
-    /* The build number of an image. */
-    uint32_t build;
+    uint8_t major;     /*!< The major version of an image. */
+    uint8_t minor;     /*!< The minor version of an image. */
+    uint16_t patch;    /*!< The revision or patch version of an image. */
+    uint32_t build;    /*!< The build number of an image. */
 } psa_fwu_image_version_t;
 
 /**
@@ -141,32 +142,16 @@ typedef struct psa_fwu_image_version_t {
 #define PSA_FWU_FLAG_ENCRYPTION 0x00000002u
 
 /**
- * @brief The implementation-specific data in the component information
- *        structure.
- */
-typedef struct {
-    /* The digest of second image when store state is CANDIDATE. */
-    uint8_t candidate_digest[TFM_FWU_MAX_DIGEST_SIZE];
- } psa_fwu_impl_info_t;
-
-/**
  * @brief Information about the firmware store for a firmware component.
  */
 typedef struct psa_fwu_component_info_t {
-    /* State of the component. */
-    uint8_t state;
-    /* Error for second image when store state is REJECTED or FAILED. */
-    psa_status_t error;
-    /* Version of active image. */
-    psa_fwu_image_version_t version;
-    /* Maximum image size in bytes. */
-    uint32_t max_size;
-    /* Flags that describe extra information about the firmware component. */
-    uint32_t flags;
-    /* Implementation-defined image location. */
-    uint32_t location;
-    /* Reserved for implementation-specific usage. */
-    psa_fwu_impl_info_t impl;
+    uint8_t state;                   /*!< State of the component. */
+    psa_status_t error;              /*!< Error for second image when store state is REJECTED or FAILED. */
+    psa_fwu_image_version_t version; /*!< Version of active image. */
+    uint32_t max_size;               /*!< Maximum image size in bytes. */
+    uint32_t flags;                  /*!< Flags that describe extra information about the firmware component. */
+    uint32_t location;               /*!< Implementation-defined image location. */
+    psa_fwu_impl_info_t impl;        /*!< Reserved for implementation-specific usage. */
 } psa_fwu_component_info_t;
 
 /**

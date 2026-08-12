@@ -1,6 +1,8 @@
 #-------------------------------------------------------------------------------
 # Copyright (C) 2025 Analog Devices, Inc. All rights reserved.
 #
+# SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
+#
 # SPDX-License-Identifier: BSD-3-Clause
 #
 #-------------------------------------------------------------------------------
@@ -31,7 +33,14 @@ if(TFM_PARTITION_CRYPTO)
 
     target_link_libraries(crypto_service_crypto_hw
         PRIVATE
-            crypto_service_mbedcrypto
+            crypto_service_tfpsacrypto
             platform_s
     )
+
+    # The config files need to access crypto accelerator configurations.
+    target_include_directories(psa_crypto_library_config
+        INTERFACE
+            ${PLATFORM_DIR}/ext/target/${TFM_PLATFORM}/accelerator/include
+    )
+
 endif()

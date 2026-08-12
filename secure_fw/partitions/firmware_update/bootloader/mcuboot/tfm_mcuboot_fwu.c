@@ -248,8 +248,12 @@ psa_status_t fwu_bootloader_install_image(const psa_fwu_component_t *candidates,
                 return PSA_ERROR_STORAGE_FAILURE;
             } else if (rc > 0) {
                 /* No more dependency found. */
-                rc = 0;
                 break;
+            }
+
+            /* Check against payload length overflow */
+            if (len > sizeof(dep)) {
+                return PSA_ERROR_INVALID_ARGUMENT;
             }
 
             /* A dependency requirement is found. Set check_pass to false. */
@@ -492,7 +496,10 @@ psa_status_t fwu_bootloader_abort(psa_fwu_component_t component)
         return PSA_ERROR_INVALID_ARGUMENT;
     }
 
-    flash_area_erase(fap, 0, fap->fa_size);
+    if (flash_area_erase(fap, 0, fap->fa_size) != 0) {
+        WARN_UNPRIV_RAW("TFM FWU: erasing flash on abort failed.\n");
+    }
+
     flash_area_close(fap);
     mcuboot_ctx[component].fap = NULL;
     mcuboot_ctx[component].loaded_size = 0;

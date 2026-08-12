@@ -66,53 +66,43 @@ TFM_CRYPTO_API(psa_status_t, psa_crypto_init)(void)
 
 TFM_CRYPTO_API(int, psa_can_do_hash)(psa_algorithm_t hash_alg)
 {
-    (void)hash_alg;
-    /* There isn't any hashing algorithm that would not be ready
-     * to be used after TF-M has booted up, hence this function
-     * just returns success all the time
-     */
-    return (int)true;
-}
-
-TFM_CRYPTO_API(int, psa_can_do_cipher)(psa_key_type_t key_type, psa_algorithm_t cipher_alg)
-{
-    (void)cipher_alg;
-    (void)key_type;
-    /* There isn't any cipher algorithm that would not be ready
-     * to be used after TF-M has booted up, hence this function
-     * just returns success all the time
-     */
-    return (int)true;
-}
-
-TFM_CRYPTO_API(psa_status_t, psa_open_key)(psa_key_id_t id,
-                                           psa_key_id_t *key)
-{
+    psa_status_t status;
+    int can_do_hash = 0;
     const struct tfm_crypto_pack_iovec iov = {
-        .function_id = TFM_CRYPTO_OPEN_KEY_SID,
-        .key_id = id,
+        .function_id = TFM_CRYPTO_CAN_DO_HASH_SID,
+        .alg = hash_alg,
     };
     psa_invec in_vec[] = {
         {.base = &iov, .len = sizeof(struct tfm_crypto_pack_iovec)},
     };
     psa_outvec out_vec[] = {
-        {.base = key, .len = sizeof(psa_key_id_t)},
+        {.base = &can_do_hash, .len = sizeof(int)},
     };
 
-    return API_DISPATCH(in_vec, out_vec);
+    status = API_DISPATCH(in_vec, out_vec);
+
+    return (status != PSA_SUCCESS) ? 0 : can_do_hash;
 }
 
-TFM_CRYPTO_API(psa_status_t, psa_close_key)(psa_key_id_t key)
+TFM_CRYPTO_API(int, psa_can_do_cipher)(psa_key_type_t key_type, psa_algorithm_t cipher_alg)
 {
+    psa_status_t status;
+    int can_do_cipher = 0;
     const struct tfm_crypto_pack_iovec iov = {
-        .function_id = TFM_CRYPTO_CLOSE_KEY_SID,
-        .key_id = key,
+        .function_id = TFM_CRYPTO_CAN_DO_CIPHER_SID,
+        .alg = cipher_alg,
     };
     psa_invec in_vec[] = {
         {.base = &iov, .len = sizeof(struct tfm_crypto_pack_iovec)},
+        {.base = &key_type, .len = sizeof(psa_key_type_t)},
+    };
+    psa_outvec out_vec[] = {
+        {.base = &can_do_cipher, .len = sizeof(int)},
     };
 
-    return API_DISPATCH_NO_OUTVEC(in_vec);
+    status = API_DISPATCH(in_vec, out_vec);
+
+    return (status != PSA_SUCCESS) ? 0 : can_do_cipher;
 }
 
 TFM_CRYPTO_API(psa_status_t, psa_import_key)(const psa_key_attributes_t *attributes,
@@ -1687,12 +1677,12 @@ TFM_CRYPTO_API(psa_status_t, psa_key_derivation_input_integer)(
 
 TFM_CRYPTO_API(psa_status_t, psa_key_derivation_verify_bytes)(
                                       psa_key_derivation_operation_t *operation,
-                                      const uint8_t *expected_output,
-                                      size_t output_length)
+                                      const uint8_t *expected,
+                                      size_t expected_length)
 {
     (void)operation;
-    (void)expected_output;
-    (void)output_length;
+    (void)expected;
+    (void)expected_length;
     /* To be implemented when the PSA backend supports it */
     return PSA_ERROR_NOT_SUPPORTED;
 }

@@ -1,8 +1,9 @@
-#
+#-------------------------------------------------------------------------------
 # Copyright (c) 2023, Nordic Semiconductor ASA.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
+#-------------------------------------------------------------------------------
 
 cmake_policy(SET CMP0076 NEW)
 set(CMAKE_CURRENT_SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR})
@@ -31,7 +32,6 @@ if(BL2)
     target_include_directories(platform_bl2
         PUBLIC
             ../common/nrf91/partition
-        PRIVATE
             .
     )
 endif()

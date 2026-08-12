@@ -8,6 +8,8 @@
 #-------------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.21)
 
+include(hex_generator)
+
 add_library(platform_s STATIC)
 add_library(platform_region_defs INTERFACE)
 add_library(platform_common_interface INTERFACE)
@@ -41,9 +43,8 @@ set(CMSIS_OVERRIDE_HEADER "${CMAKE_CURRENT_LIST_DIR}/include/cmsis_override.h")
 add_library(cmsis_stack_override INTERFACE)
 target_compile_options(cmsis_stack_override
     INTERFACE
-        "$<$<C_COMPILER_ID:GNU>:SHELL:-include ${CMSIS_OVERRIDE_HEADER}>"
+        "$<$<C_COMPILER_ID:GNU,Clang>:SHELL:-include ${CMSIS_OVERRIDE_HEADER}>"
         "$<$<AND:$<OR:$<COMPILE_LANGUAGE:C>,$<COMPILE_LANGUAGE:CXX>>,$<C_COMPILER_ID:IAR>>:SHELL:--preinclude ${CMSIS_OVERRIDE_HEADER}>"
-        "$<$<C_COMPILER_ID:Clang>:SHELL:-include ${CMSIS_OVERRIDE_HEADER}>"
 )
 
 #========================= Platform Common interface ==========================#
@@ -82,6 +83,7 @@ target_sources(platform_s
         $<$<OR:$<BOOL:${TEST_S_FPU}>,$<BOOL:${TEST_NS_FPU}>>:${CMAKE_SOURCE_DIR}/platform/ext/common/test_interrupt.c>
         $<$<BOOL:${TFM_SANITIZE}>:ext/common/tfm_sanitize_handlers.c>
         ./ext/common/tfm_fatal_error.c
+        $<$<BOOL:${PLATFORM_DEFAULT_MEASUREMENT_SLOTS}>:${CMAKE_SOURCE_DIR}/platform/ext/common/tfm_boot_measurement.c>
 )
 
 # If this is not added to the tfm_s it will not correctly override the weak
@@ -100,23 +102,26 @@ target_link_libraries(platform_s
         cmsis_stack_override
         cmsis
         tfm_log_headers
+        tfm_helper_lib
         $<$<BOOL:${CONFIG_TFM_BACKTRACE_ON_CORE_PANIC}>:tfm_log_unpriv>
         $<$<BOOL:${CONFIG_TFM_BACKTRACE_ON_CORE_PANIC}>:tfm_log>
         $<$<BOOL:${CONFIG_TFM_BACKTRACE_ON_CORE_PANIC}>:tfm_backtrace>
+        $<$<BOOL:${TFM_PARTITION_DTPM_CLIENT}>:eventlog>
     PRIVATE
         tfm_config
-        tfm_spm_defs
         $<$<BOOL:${TFM_PARTITION_CRYPTO}>:platform_crypto_keys>
         $<$<BOOL:${PLATFORM_DEFAULT_ATTEST_HAL}>:tfm_sprt>
-        $<$<BOOL:${TFM_PARTITION_CRYPTO}>:crypto_service_mbedcrypto>
+        $<$<BOOL:${TFM_PARTITION_CRYPTO}>:crypto_service_tfpsacrypto>
         $<$<BOOL:${TFM_PARTITION_INITIAL_ATTESTATION}>:tfm_attestation_defs>
-        $<$<NOT:$<STREQUAL:${TFM_FIH_PROFILE},OFF>>:tfm_fih>
+        tfm_fih
         tfm_log
         psa_crypto_library_config
 )
 
 target_compile_definitions(platform_s
     PUBLIC
+        TFM_FIH_PROFILE_${TFM_FIH_PROFILE}
+        $<$<NOT:$<STREQUAL:${TFM_FIH_PROFILE},OFF>>:TFM_FIH_PROFILE_ON>
         LOG_LEVEL=${TFM_SPM_LOG_LEVEL}
         $<$<BOOL:${TFM_SPM_LOG_RAW_ENABLED}>:TFM_SPM_LOG_RAW_ENABLED>
         $<$<BOOL:${CONFIG_TFM_BACKTRACE_ON_CORE_PANIC}>:CONFIG_TFM_BACKTRACE_ON_CORE_PANIC>
@@ -124,6 +129,7 @@ target_compile_definitions(platform_s
         $<$<BOOL:${CONFIG_TFM_BACKTRACE_ON_CORE_PANIC}>:LOG_LEVEL_UNPRIV=LOG_LEVEL_ERROR>
         $<$<BOOL:${OTP_NV_COUNTERS_RAM_EMULATION}>:OTP_NV_COUNTERS_RAM_EMULATION=1>
         $<$<BOOL:${TFM_EXCEPTION_INFO_DUMP}>:TFM_EXCEPTION_INFO_DUMP>
+        TFM_EXCEPTION_DUMP_LVL=${TFM_EXCEPTION_DUMP_LVL}
         $<$<OR:$<VERSION_GREATER:${TFM_ISOLATION_LEVEL},1>,$<STREQUAL:"${TEST_PSA_API}","IPC">>:CONFIG_TFM_ENABLE_MEMORY_PROTECT>
         $<$<STREQUAL:${CONFIG_TFM_FLOAT_ABI},hard>:CONFIG_TFM_FLOAT_ABI=2>
         $<$<STREQUAL:${CONFIG_TFM_FLOAT_ABI},soft>:CONFIG_TFM_FLOAT_ABI=0>
@@ -139,6 +145,7 @@ target_compile_definitions(platform_s
     PRIVATE
         $<$<BOOL:${SYMMETRIC_INITIAL_ATTESTATION}>:SYMMETRIC_INITIAL_ATTESTATION>
         $<$<BOOL:${TFM_DUMMY_PROVISIONING}>:TFM_DUMMY_PROVISIONING>
+        $<$<BOOL:${PROFILE_DEFINITION_LARGE}>:PROFILE_DEFINITION_LARGE>
         $<$<BOOL:${PLATFORM_DEFAULT_OTP_WRITEABLE}>:OTP_WRITEABLE>
 )
 
@@ -159,7 +166,7 @@ if(TFM_PARTITION_CRYPTO)
 
     target_link_libraries(platform_crypto_keys
         PRIVATE
-            crypto_service_mbedcrypto
+            crypto_service_tfpsacrypto
             tfm_psa_rot_partition_crypto
             platform_region_defs
             tfm_config
@@ -207,6 +214,7 @@ if(BL2)
             $<$<BOOL:${BL2_SANITIZE}>:ext/common/tfm_sanitize_handlers.c>
             ./ext/common/tfm_fatal_error.c
             ./ext/common/tfm_assert.c
+            $<$<BOOL:${MCUBOOT_IMAGE_MULTI_SIG_SUPPORT}>:ext/common/bl2_hal_multisig.c>
     )
 
     target_link_libraries(platform_bl2
@@ -216,6 +224,7 @@ if(BL2)
             cmsis_stack_override
             cmsis
             tfm_log_headers
+            tfm_helper_lib
         PRIVATE
             bl2_crypto
             bl2_hal
@@ -239,10 +248,12 @@ if(BL2)
             $<$<BOOL:${PLATFORM_DEFAULT_NV_COUNTERS}>:PLATFORM_DEFAULT_NV_COUNTERS>
             $<$<BOOL:${PLATFORM_DEFAULT_OTP_WRITEABLE}>:OTP_WRITEABLE>
             $<$<BOOL:${PLATFORM_DEFAULT_ROTPK}>:PLATFORM_DEFAULT_ROTPK>
+            $<$<BOOL:${PROFILE_DEFINITION_LARGE}>:PROFILE_DEFINITION_LARGE>
             $<$<AND:$<BOOL:${CONFIG_TFM_BOOT_STORE_MEASUREMENTS}>,$<NOT:$<BOOL:${CONFIG_TFM_BOOT_STORE_ENCODED_MEASUREMENTS}>>>:TFM_MEASURED_BOOT_API>
             $<$<AND:$<BOOL:${TFM_LOG_FATAL_ERRORS}>,$<NOT:$<STREQUAL:${TFM_BL2_LOG_LEVEL},"LOG_LEVEL_NONE">>>:LOG_FATAL_ERRORS>
             $<$<AND:$<BOOL:${TFM_LOG_FATAL_ERRORS}>,$<NOT:$<STREQUAL:${TFM_BL2_LOG_LEVEL},"LOG_LEVEL_NONE">>>:LOG_NONFATAL_ERRORS>
             LOG_LEVEL=${TFM_BL2_LOG_LEVEL}
+            MAX_KEYS_PER_IMAGE=${MCUBOOT_ROTPK_MAX_KEYS_PER_IMAGE}
     )
 
     target_compile_options(platform_bl2
@@ -274,6 +285,7 @@ if(BL1 AND PLATFORM_DEFAULT_BL1)
             platform_common_interface
             cmsis_stack_override
             cmsis
+            tfm_helper_lib
     )
 
     target_compile_definitions(platform_bl1_1_interface
@@ -376,12 +388,13 @@ if(BL1 AND PLATFORM_DEFAULT_BL1)
     target_link_libraries(platform_bl1_2
         PUBLIC
             platform_bl1_1_interface
+            tfm_helper_lib
+            tfm_boot_status
         PRIVATE
             tfm_fih
             tfm_fih_headers
             tfm_log
             tfm_vprintf
-            tfm_boot_status
             platform_region_defs
             bl1_1_shared_lib_interface
     )
@@ -417,6 +430,7 @@ target_compile_definitions(platform_region_defs
         DAUTH_${DEBUG_AUTHENTICATION}
         $<$<BOOL:${MCUBOOT_IMAGE_NUMBER}>:MCUBOOT_IMAGE_NUMBER=${MCUBOOT_IMAGE_NUMBER}>
         $<$<BOOL:${MCUBOOT_BUILTIN_KEY}>:MCUBOOT_BUILTIN_KEY>
+        $<$<BOOL:${MCUBOOT_ENC_IMAGES}>:MCUBOOT_ENC_IMAGES>
         $<$<STREQUAL:${SIG_TYPE},RSA>:MCUBOOT_SIGN_RSA>
         $<$<STREQUAL:${SIG_TYPE},RSA>:MCUBOOT_SIGN_RSA_LEN=${SIG_LEN}>
         $<$<STREQUAL:${SIG_TYPE},EC>:MCUBOOT_SIGN_EC${SIG_LEN}>
@@ -432,7 +446,8 @@ target_compile_definitions(platform_region_defs
         $<$<BOOL:${PLATFORM_DEFAULT_BL1_2_TESTS}>:PLATFORM_DEFAULT_BL1_2_TESTS>
         $<$<BOOL:${TFM_BL1_2_IMAGE_ENCRYPTION}>:TFM_BL1_2_IMAGE_ENCRYPTION>
         $<$<BOOL:${TFM_BL1_2_EMBED_ROTPK_IN_IMAGE}>:TFM_BL1_2_EMBED_ROTPK_IN_IMAGE>
-        $<$<BOOL:${TFM_BL1_2_IMAGE_ENCRYPTION}>:TFM_BL1_2_IMAGE_ENCRYPTION>
+        $<$<BOOL:${TFM_BL1_2_ENABLE_ROTPK_POLICIES}>:TFM_BL1_2_ENABLE_ROTPK_POLICIES>
+        $<$<BOOL:${TFM_BL1_2_IMAGE_BINDING}>:TFM_BL1_2_IMAGE_BINDING>
         $<$<BOOL:${TFM_BL1_2_SIGNER_AMOUNT}>:TFM_BL1_2_SIGNER_AMOUNT=${TFM_BL1_2_SIGNER_AMOUNT}>
         $<$<BOOL:${TFM_BL1_2_ECDSA_CURVE}>:TFM_BL1_2_ECDSA_CURVE=TFM_BL1_CURVE_${TFM_BL1_2_ECDSA_CURVE}>
         $<$<BOOL:${TFM_BL1_2_MEASUREMENT_HASH_ALG}>:TFM_BL1_2_MEASUREMENT_HASH_ALG=TFM_BL1_HASH_ALG_${TFM_BL1_2_MEASUREMENT_HASH_ALG}>
@@ -444,6 +459,7 @@ target_compile_definitions(platform_region_defs
         $<$<BOOL:${TFM_BL1_1_MEASUREMENT_HASH_ALG}>:TFM_BL1_ENABLE_${TFM_BL1_1_ROTPK_HASH_ALG}>
         $<$<BOOL:${MCUBOOT_HW_KEY}>:MCUBOOT_HW_KEY>
         $<$<BOOL:${TFM_PXN_ENABLE}>:TFM_PXN_ENABLE>
+        $<$<BOOL:${PLATFORM_DEFAULT_MEASUREMENT_SLOTS}>:PLATFORM_DEFAULT_MEASUREMENT_SLOTS>
 )
 
 target_include_directories(platform_region_defs
@@ -457,3 +473,10 @@ target_link_libraries(platform_region_defs
     INTERFACE
         tfm_config
 )
+
+if(TFM_MERGE_HEX_FILES)
+    merge_hex(merged_secure_hex
+        OUTPUT         ${TFM_S_HEX_FILE_PATH}
+        INPUT_TARGETS  ${TFM_S_HEX_MERGE_LIST}
+    )
+endif()

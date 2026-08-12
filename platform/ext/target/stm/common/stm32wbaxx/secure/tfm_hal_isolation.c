@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, Arm Limited. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -9,7 +9,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
-#include "array.h"
+#include "tfm_utils.h"
 #include "tfm_hal_device_header.h"
 #include "Driver_Common.h"
 #include "mmio_defs.h"
@@ -248,13 +248,18 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_set_up_static_boundaries(
     mpu_init();
 #endif /* CONFIG_TFM_ENABLE_MEMORY_PROTECT */
 
+#if TFM_ISOLATION_LEVEL == 1
+struct mpu_armv8m_dev_t dev_mpu_s_disable = { MPU_BASE };
+    mpu_armv8m_disable(&dev_mpu_s_disable);
+#endif
+
     *p_spm_boundary = (uintptr_t)PROT_BOUNDARY_VAL;
 
     FIH_RET(fih_int_encode(TFM_HAL_SUCCESS));
 }
 
 #ifdef TFM_FIH_PROFILE_ON
-fih_int tfm_hal_verify_static_boundaries(void)
+fih_ret tfm_hal_verify_static_boundaries(void)
 {
     FIH_RET(fih_int_encode(TFM_HAL_SUCCESS));
 }

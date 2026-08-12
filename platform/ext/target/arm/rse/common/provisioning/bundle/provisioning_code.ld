@@ -29,7 +29,7 @@ MEMORY
     VALUES (r) : ORIGIN = PROVISIONING_BUNDLE_VALUES_START, LENGTH = PROVISIONING_BUNDLE_VALUES_SIZE
 }
 
-ENTRY(do_provisioning)
+ENTRY(do_provision)
 
 SECTIONS
 {
@@ -42,7 +42,9 @@ SECTIONS
 
     DATA :
     {
-        *(COMMON .data* .bss*)
+        *(.data*)
+        *(.bss*)
+        *(COMMON)
         /* Non secret provisioning values placed directly after data
          * so ensure 4 byte aligned */
         . = ALIGN(4);

@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Copyright (c) 2020-2024, Arm Limited. All rights reserved.
+# SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -33,7 +33,7 @@ target_add_scatter_file(tfm_s
     $<$<C_COMPILER_ID:ARMClang>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/armclang/tfm_isolation_s.sct>
     $<$<C_COMPILER_ID:GNU>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/gcc/tfm_isolation_s.ld>
     $<$<C_COMPILER_ID:IAR>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/iar/tfm_isolation_s.icf>
-    $<$<C_COMPILER_ID:Clang>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/llvm/tfm_isolation_s.ld>
+    $<$<C_COMPILER_ID:Clang>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/atfe/tfm_isolation_s.ld>
 )
 
 if(BL2)
@@ -45,7 +45,7 @@ if(BL2)
             $<$<C_COMPILER_ID:ARMClang>:Device/Source/armclang/musca_bl2.sct>
             $<$<C_COMPILER_ID:GNU>:Device/Source/gcc/musca_bl2.ld>
             $<$<C_COMPILER_ID:IAR>:Device/Source/iar/musca_bl2.icf>
-            $<$<C_COMPILER_ID:Clang>:Device/Source/llvm/musca_bl2.ld>
+            $<$<C_COMPILER_ID:Clang>:Device/Source/atfe/musca_bl2.ld>
     )
 endif()
 
@@ -70,6 +70,8 @@ target_include_directories(platform_s
 )
 
 target_sources(platform_s
+    INTERFACE
+        $<$<STREQUAL:"${TFM_FIH_PROFILE}","HIGH">:${PLATFORM_DIR}/ext/common/template/tfm_fih_platform.c>
     PRIVATE
         tfm_peripherals_def.c
         CMSIS_Driver/Driver_QSPI_Flash.c
@@ -84,6 +86,7 @@ target_sources(platform_s
         Native_Driver/qspi_ip6514e_drv.c
         Native_Driver/musca_b1_scc_drv.c
         Native_Driver/ppc_sse200_drv.c
+        ${CMAKE_SOURCE_DIR}/secure_fw/shared/crt_strcmp.c
         ${PLATFORM_DIR}/ext/target/arm/drivers/usart/pl011/uart_pl011_drv.c
         $<$<NOT:$<BOOL:${TFM_PARTITION_SLIH_TEST}>>:${PLATFORM_DIR}/ext/target/arm/drivers/timer/cmsdk/timer_cmsdk_drv.c>
         $<$<OR:$<BOOL:${TFM_S_REG_TEST}>,$<BOOL:${TFM_NS_REG_TEST}>>:${CMAKE_CURRENT_SOURCE_DIR}/plat_test.c>
@@ -269,9 +272,15 @@ install(FILES       ${TARGET_PLATFORM_PATH}/cpuarch.cmake
 install(FILES       Device/Source/armclang/musca_ns.sct
                     Device/Source/gcc/musca_ns.ld
                     Device/Source/iar/musca_ns.icf
-                    Device/Source/llvm/musca_ns.ldc
+                    Device/Source/atfe/musca_ns.ldc
         DESTINATION ${INSTALL_PLATFORM_NS_DIR}/linker_scripts)
 
 # Install test configs
 install(DIRECTORY   ${TARGET_PLATFORM_PATH}/tests
         DESTINATION ${INSTALL_PLATFORM_NS_DIR})
+
+create_tfm_s_hex_merge_list(
+    BL2_TARGET          bl2_hex
+    TFM_S_TARGET        tfm_s_hex
+    TFM_S_SIGNED_TARGET tfm_s_signed_hex
+)

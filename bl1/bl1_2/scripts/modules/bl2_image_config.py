@@ -7,27 +7,27 @@
 #
 #-------------------------------------------------------------------------------
 
-import c_struct
-import c_macro
-import c_include
+from tfm_tools.c_struct import C_struct
+from tfm_tools.c_macro import C_macro
+from tfm_tools import c_include
+from tfm_tools import arg_utils
 import pickle
 import sys
 from enum import Enum
-from arg_utils import pre_parse_args, parse_args_automatically
 import argparse
 
 def add_arguments(parser : argparse.ArgumentParser,
                   prefix : str = "",
                   required : bool = True,
                   ) -> None:
-    return pre_parse_args(parser, "bl2_image_config",
-                                  help="Path to bl2_image config file",
-                                  type=BL2_image_config.from_config_file)
+    return arg_utils.pre_parse_args(parser, "bl2_image_config",
+                                    help="Path to bl2_image config file",
+                                    type=BL2_image_config.from_config_file)
 
 def parse_args(args : argparse.Namespace,
                prefix : str = "",
                ) -> dict:
-    return parse_args_automatically(args, ["bl2_image_config"], prefix)
+    return arg_utils.parse_args_automatically(args, ["bl2_image_config"], prefix)
 
 class BL2_image_config:
     def __init__(self, image, defines):
@@ -38,12 +38,13 @@ class BL2_image_config:
         self.__dict__.update( self.defines._definitions)
 
     @staticmethod
-    def from_h_file(h_file_path, includes, defines):
-        image = c_struct.C_struct.from_h_file(h_file_path,
+    def from_h_file(h_file_path, compiler, includes, defines):
+        image = C_struct.from_h_file(h_file_path,
                                               'bl1_2_image_t',
+                                              compiler,
                                               includes, defines)
 
-        config = c_macro.C_macro.from_h_file(h_file_path, includes, defines)
+        config = C_macro.from_h_file(h_file_path, includes, defines)
 
         return BL2_image_config(image, config)
 
@@ -63,9 +64,6 @@ corresponds to the BL2 image defined by those two, which can then be used as a
 template to create a binary image of BL2.
 """
 if __name__ == "__main__":
-    import argparse
-    import c_include
-
     parser = argparse.ArgumentParser(allow_abbrev=False,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description=script_description)
@@ -74,10 +72,12 @@ if __name__ == "__main__":
     parser.add_argument("--bl2_image_config_output_file", help="file to output bl2 image config to", required=True)
     args = parser.parse_args()
 
+    compiler = c_include.get_compiler(args.compile_commands_file, "bl1_2/main.c")
     includes = c_include.get_includes(args.compile_commands_file, "bl1_2/main.c")
     defines = c_include.get_defines(args.compile_commands_file, "bl1_2/main.c")
 
     bl2_image_config = BL2_image_config.from_h_file(args.bl2_image_layout_h_file,
+                                                    compiler,
                                                     includes, defines)
 
     bl2_image_config.to_config_file(args.bl2_image_config_output_file)

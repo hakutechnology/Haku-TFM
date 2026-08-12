@@ -31,6 +31,15 @@ extern "C" {
 
 #define COUNTER_BYTES(x) ALIGN((ROUND_UP((x), 8) / 8), 4)
 
+/**
+ * @defgroup cod_otp_defs Chip Output Data (COD) size definitions
+ * @{
+ */
+#define RSE_OTP_COD_CMAC_SIZE         16
+#define RSE_OTP_COD_RAK_PUB_SIZE      96
+#define RSE_OTP_COD_DMA_ICS_HASH_SIZE 48
+/** @} */
+
 __PACKED_STRUCT rse_otp_area_info_t {
     __PACKED_UNION {
         __PACKED_STRUCT {
@@ -78,14 +87,31 @@ struct rse_otp_cm_rotpk_area_t {
     uint8_t rotpk[RSE_OTP_CM_ROTPK_AMOUNT][RSE_OTP_CM_ROTPK_SIZE];
 };
 
+__PACKED_STRUCT rse_otp_cod_cm_area_t {
+    uint8_t cod_cmac[RSE_OTP_COD_CMAC_SIZE];
+    uint8_t rak_pub[RSE_OTP_COD_RAK_PUB_SIZE];
+};
+
+__PACKED_STRUCT rse_otp_cc_trng_config_t {
+    uint32_t trng_rosc_sc[4];
+    uint8_t trng_in_use;
+    uint8_t padding[3];
+};
+
+__PACKED_STRUCT rse_otp_entropy_config_t {
+    uint32_t high_threshold;
+    uint32_t repetition_count;
+};
+
 __PACKED_STRUCT rse_otp_cm_area_t {
     uint32_t zero_count;
     uint32_t provisioning_blob_version;
-    uint32_t config_flags;
+    uint32_t cm_policies;
 
 #ifdef RSE_OTP_HAS_CCA_ITEMS
     uint32_t cca_system_properties;
 #endif
+
 #ifdef RSE_OTP_HAS_RSE_ID
     uint32_t rse_id;
 #endif
@@ -94,7 +120,15 @@ __PACKED_STRUCT rse_otp_cm_area_t {
     struct rse_otp_subplatform_cm_area_t subplatform;
 #endif
 
-    uint8_t cod[RSE_OTP_COD_SIZE];
+#ifdef RSE_OTP_HAS_CC_TRNG_CONFIG
+    struct rse_otp_cc_trng_config_t cc_trng_config;
+#endif
+
+#ifdef RSE_OTP_HAS_SP800_90B_ENTROPY_PARAMS
+    struct rse_otp_entropy_config_t entropy_config;
+#endif
+
+    struct rse_otp_cod_cm_area_t cod;
 
     uint8_t reserved[RSE_OTP_CM_RESERVED_SIZE];
     struct rse_otp_cm_rotpk_area_t rotpk_areas[RSE_OTP_CM_ROTPK_MAX_REVOCATIONS + 1];
@@ -122,7 +156,7 @@ struct rse_otp_dm_rotpk_area_t {
 __PACKED_STRUCT rse_otp_dm_area_t {
     uint32_t zero_count;
     uint32_t provisioning_blob_version;
-    uint32_t config_flags;
+    uint32_t dm_policies;
 
 #ifdef RSE_OTP_HAS_ROUTING_TABLES
     struct rse_single_node_routing_tables_t routing_tables;
@@ -135,6 +169,11 @@ __PACKED_STRUCT rse_otp_dm_area_t {
     uint8_t reserved[RSE_OTP_DM_RESERVED_SIZE];
 
     struct rse_otp_dm_rotpk_area_t rotpk_areas[RSE_OTP_DM_ROTPK_MAX_REVOCATIONS + 1];
+};
+
+__PACKED_STRUCT rse_otp_se_dev_control_ps_fc_t {
+    uint8_t se_dev_control;
+    uint8_t ps_fc[RSE_PS_FC_HANDLERS_NUM];
 };
 
 __PACKED_STRUCT rse_otp_dynamic_area_t {
@@ -152,8 +191,16 @@ __PACKED_STRUCT rse_otp_dynamic_area_t {
     uint8_t security_version_counters_bank_3[RSE_OTP_NV_COUNTERS_BANK_3_AMOUNT][COUNTER_BYTES(RSE_OTP_NV_COUNTERS_BANK_3_MAX_VALUE)];
 
 #ifdef RSE_OTP_HAS_ENDORSEMENT_CERTIFICATE
-    uint8_t iak_endorsement_certificate[RSE_OTP_ENDORSEMENT_CERTIFICATE_SIZE];
-    uint8_t iak_endorsement_parameters[RSE_OTP_ENDORSEMENT_CERTIFICATE_METADATA_SIZE];
+    uint8_t iak_endorsement_certificate_signature[RSE_OTP_ENDORSEMENT_CERTIFICATE_SIGNATURE_SIZE];
+    uint8_t iak_endorsement_certificate_parameters[RSE_OTP_ENDORSEMENT_CERTIFICATE_PARAMETERS_SIZE];
+#endif
+
+#ifdef RSE_SKU_ENABLED
+    uint32_t feature_control;
+#endif /* RSE_SKU_ENABLED */
+
+#if defined(RSE_HAS_SE_DEV_SOFT_LCS) || defined(RSE_SKU_ENABLED)
+    struct rse_otp_se_dev_control_ps_fc_t se_dev_control_ps_fc;
 #endif
 
 #ifdef RSE_OTP_DYNAMIC_SUBPLATFORM_ITEMS
@@ -193,6 +240,15 @@ enum rse_otp_cm_policies_t {
     CM_POLICIES_DM_PROVISIONING_RESERVED               = 0x5,
 
     _CM_POLICIES_MAX_VALUE = UINT32_MAX
+};
+
+/* SE-DEV control and product specific feature control possible
+ * values
+ */
+enum rse_otp_se_dev_control_ps_fc_valus_t {
+    RSE_OTP_SE_DEV_CONTROL_PS_FC_VALUE_DISABLED         = 0b000,
+    RSE_OTP_SE_DEV_CONTROL_PS_FC_VALUE_ENABLED          = 0b010,
+    RSE_OTP_SE_DEV_CONTROL_PS_FC_VALUE_DISABLED_LOCKED  = 0b111
 };
 
 /**

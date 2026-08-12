@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-#include "nrf.h"
+#include <nrfx.h>
+#include <hal/nrf_gpio.h>
 #include <stdint.h>
 #include <tfm_platform_api.h>
 #include <tfm_ioctl_core_api.h>
@@ -39,7 +40,7 @@ enum tfm_platform_err_t tfm_platform_mem_read(void *destination, uint32_t addr,
 enum tfm_platform_err_t tfm_platform_gpio_pin_mcu_select(uint32_t pin_number, uint32_t mcu,
 							 uint32_t *result)
 {
-#if defined(GPIO_PIN_CNF_MCUSEL_Msk)
+#if NRF_GPIO_HAS_SEL
 	enum tfm_platform_err_t ret;
 	psa_invec in_vec;
 	psa_outvec out_vec;
@@ -94,3 +95,116 @@ enum tfm_platform_err_t tfm_platform_mem_write32(uint32_t addr, uint32_t value,
 
 	return ret;
 }
+
+#if defined(CONFIG_SOC_NRF7120_TFM_MRAMC_SERVICE)
+enum tfm_platform_err_t tfm_platform_mramc_init(void)
+{
+	return tfm_platform_ioctl(TFM_PLATFORM_IOCTL_MRAMC_INIT_SERVICE, NULL,
+			    NULL);
+}
+
+enum tfm_platform_err_t tfm_platform_mramc_set_wen(uint32_t write_mode)
+{
+	psa_invec in_vec;
+
+	struct tfm_mramc_set_wen_service_args_t args;
+
+	args.write_mode = write_mode;
+
+	in_vec.base = (const void *)&args;
+	in_vec.len = sizeof(struct tfm_mramc_set_wen_service_args_t);
+
+	return tfm_platform_ioctl(TFM_PLATFORM_IOCTL_MRAMC_SET_WEN_SERVICE, &in_vec,
+				NULL);
+}
+#endif
+
+#if defined(CONFIG_SOC_SERIES_NRF71_TFM_RAM_CTRL_SERVICE)
+static enum tfm_platform_err_t ram_ctrl_set(uint32_t op, uint32_t addr, uint32_t len, bool on)
+{
+	psa_invec in_vec;
+	psa_outvec out_vec;
+	struct tfm_ram_ctrl_service_args_t args;
+	struct tfm_ram_ctrl_service_out_t out;
+
+	args.op = op;
+	args.addr = addr;
+	args.len = len;
+	args.on = (uint32_t)on;
+
+	in_vec.base = (const void *)&args;
+	in_vec.len = sizeof(args);
+	out_vec.base = (void *)&out;
+	out_vec.len = sizeof(out);
+
+	return tfm_platform_ioctl(TFM_PLATFORM_IOCTL_RAM_CTRL_SERVICE, &in_vec, &out_vec);
+}
+
+enum tfm_platform_err_t tfm_platform_ram_ctrl_power_set(uint32_t addr, uint32_t len, bool on)
+{
+	return ram_ctrl_set(TFM_RAM_CTRL_OP_POWER, addr, len, on);
+}
+
+enum tfm_platform_err_t tfm_platform_ram_ctrl_retention_set(uint32_t addr, uint32_t len, bool on)
+{
+	return ram_ctrl_set(TFM_RAM_CTRL_OP_RETAIN, addr, len, on);
+}
+
+enum tfm_platform_err_t tfm_platform_ram_ctrl_read_status(uint32_t *control, uint32_t *ret,
+							  uint32_t *ret2)
+{
+	enum tfm_platform_err_t err;
+	psa_invec in_vec;
+	psa_outvec out_vec;
+	struct tfm_ram_ctrl_service_args_t args;
+	struct tfm_ram_ctrl_service_out_t out;
+
+	args.op = TFM_RAM_CTRL_OP_READ_STATUS;
+	args.addr = 0;
+	args.len = 0;
+	args.on = 0;
+
+	in_vec.base = (const void *)&args;
+	in_vec.len = sizeof(args);
+	out_vec.base = (void *)&out;
+	out_vec.len = sizeof(out);
+
+	err = tfm_platform_ioctl(TFM_PLATFORM_IOCTL_RAM_CTRL_SERVICE, &in_vec, &out_vec);
+
+	if (control != NULL) {
+		*control = out.control;
+	}
+	if (ret != NULL) {
+		*ret = out.ret;
+	}
+	if (ret2 != NULL) {
+		*ret2 = out.ret2;
+	}
+
+	return err;
+}
+#endif /* NRF_TFM_RAM_CTRL_SERVICE */
+
+#if defined(CONFIG_NRF_WIFI_KMU)
+enum tfm_platform_err_t tfm_platform_wifi_kmu_write_key(uint32_t slot_id, uint32_t target_addr,
+							const uint8_t *key_buffer, size_t key_size)
+{
+	psa_invec in_vec;
+	struct tfm_wifi_kmu_write_key_service_args_t args;
+
+	args.slot_id = slot_id;
+	args.target_addr = target_addr;
+	args.key_buffer = key_buffer;
+	args.key_size = key_size;
+
+	in_vec.base = (const void *)&args;
+	in_vec.len = sizeof args;
+
+	return tfm_platform_ioctl(TFM_PLATFORM_IOCTL_WIFI_KMU_WRITE_KEY_SERVICE, &in_vec, NULL);
+}
+
+enum tfm_platform_err_t tfm_platform_wifi_kmu_erase_keys(void)
+{
+	return tfm_platform_ioctl(TFM_PLATFORM_IOCTL_WIFI_KMU_ERASE_KEYS_SERVICE, NULL, NULL);
+}
+#endif /* CONFIG_NRF_WIFI_KMU */

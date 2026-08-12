@@ -33,6 +33,19 @@ extern "C" {
 #define MCUBOOT_USE_FLASH_AREA_GET_SECTORS
 #define MCUBOOT_TARGET_CONFIG "flash_layout.h"
 
+#ifndef MCUBOOT_IMAGE_MULTI_SIG_SUPPORT
+#cmakedefine MCUBOOT_IMAGE_MULTI_SIG_SUPPORT
+#endif /* MCUBOOT_IMAGE_MULTI_SIG_SUPPORT */
+
+#ifndef MCUBOOT_IMAGE_BINDING
+#cmakedefine MCUBOOT_IMAGE_BINDING
+#endif /* MCUBOOT_IMAGE_BINDING */
+
+#cmakedefine MCUBOOT_IMAGE_ACCESS_HOOKS
+
+/*— How many RoTPK keys per image —*/
+#define MCUBOOT_ROTPK_MAX_KEYS_PER_IMAGE  @MCUBOOT_ROTPK_MAX_KEYS_PER_IMAGE@
+
 #cmakedefine MCUBOOT_HW_ROLLBACK_PROT
 #cmakedefine MCUBOOT_MEASURED_BOOT
 #cmakedefine MCUBOOT_DATA_SHARING
@@ -56,25 +69,14 @@ extern "C" {
 #define MAX_BOOT_RECORD_SZ  (132u)
 #endif /* MCUBOOT_SIGN_EC384 */
 
-#cmakedefine MCUBOOT_ENC_IMAGES
 #cmakedefine MCUBOOT_ENCRYPT_RSA
+#cmakedefine MCUBOOT_ENCRYPT_KW
 
 #ifdef MCUBOOT_ENC_IMAGES
 #define MCUBOOT_AES_@MCUBOOT_ENC_KEY_LEN@
 #endif /* MCUBOOT_ENC_IMAGES */
 
 #define MCUBOOT_BOOT_MAX_ALIGN @MCUBOOT_BOOT_MAX_ALIGN@
-
-/*
- * Cryptographic settings
- */
-/* MCUboot and TF-M also supports the usage of PSA Crypto API along with
- * Mbed TLS as the source of cryptographic primitives. However, the support for
- * MCUBOOT_USE_PSA_CRYPTO is still limited and it doesn't cover all the
- * crypto abstractions of MCUboot. For this reason it's allowed to have both
- * of them defined, in which case MCUBOOT_USE_PSA_CRYPTO will take precedence.
- */
-#define MCUBOOT_USE_MBED_TLS
 
 /*
  * Logging
@@ -86,10 +88,8 @@ extern "C" {
 /*
  * Watchdog feeding
  */
-#define MCUBOOT_WATCHDOG_FEED()     \
-    do {                            \
-        /* Do nothing. */           \
-    } while (0)
+extern void mcuboot_watchdog_feed(void);
+#define MCUBOOT_WATCHDOG_FEED() mcuboot_watchdog_feed()
 
 #ifdef __cplusplus
 }

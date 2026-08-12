@@ -19,9 +19,16 @@ target_include_directories(platform_s
 	../nrf54l
 )
 
+if(NOT NRF_DIR)
+target_include_directories(platform_s
+    PUBLIC
+        memory_service_ranges
+)
+endif()
+
 target_sources(platform_s
     PRIVATE
-        ${HAL_NORDIC_PATH}/nrfx/mdk/system_nrf54l.c
+        ${HAL_NORDIC_PATH}/nrfx/bsp/stable/mdk/nrf54l/system_nrf54l.c
         ../nrf54l/nrf54l_init.c
 )
 
@@ -39,8 +46,7 @@ target_sources(tfm_spm
 
 #========================= Files for building NS side platform ================#
 
-install(FILES       ../nrf54l/nrfx_config_nrf54l.h
-                    ../nrf54l/config.cmake
+install(FILES       ../nrf54l/config.cmake
                     ns/CMakeLists.txt
                     cpuarch.cmake
         DESTINATION ${INSTALL_PLATFORM_NS_DIR}/common/nrf54l10

@@ -61,7 +61,7 @@ Here lists a minimal set of necessary functionalities:
   - There is a non-secure :term:`HAL` that focuses on the mailbox operation API
     for Dual-core topology. For more information about it, please refer to
     :doc:`Mailbox Design in TF-M on Dual-core System
-    </design_docs/dual-cpu/mailbox_design_on_dual_core_system>`.
+    </design_docs/multi-cpu/mailbox_design>`.
   - The minimal set of :term:`TF-M` :term:`HAL` is sufficient for Secure
     Partitions by using customized peripheral interfaces. To provide easier
     portability for the Secure Partitions, a Secure Partition :term:`HAL` is
@@ -227,20 +227,27 @@ tfm_hal_system_reset()
 
 .. code-block:: c
 
-  void tfm_hal_system_reset(void)
+  void tfm_hal_system_reset(uint32_t sw_reset_syn_value)
 
 **Description**
 
-This API performs a system reset.
+This API performs a system reset (cold reset).
 
-The platform can uninitialize some resources before reset.
+The platform can uninitialize some resources before reset. The function gets passed
+a parameter, usually a register value, that gets used to set the system reset syndrome
+register before issueing the reset. This register survives resets and can be read
+to understand the root cause of the reset. A platform that does not provide this
+functionality still needs to pass ``TFM_PLAT_SWSYN_DEFAULT`` as a safe default value.
+A platform can also to redefine the value of ``TFM_PLAT_SWSYN_DEFAULT`` in case the
+default of ``0x0UL`` does not meet its requirements.
 
 When ``CONFIG_TFM_HALT_ON_CORE_PANIC`` is disabled this function is called to reset
 the system when a fatal error occurs.
 
 **Parameter**
 
-- ``void`` - None
+- ``uint32_t sw_reset_syn_value`` - The value of the register to be used to set
+                                    the platform reset syndrome
 
 **Return Values**
 
@@ -249,6 +256,57 @@ the system when a fatal error occurs.
 **Note**
 
 This API should not return.
+
+tfm_hal_get_reset_syndrome()
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Prototype**
+
+.. code-block:: c
+
+  void tfm_hal_get_reset_syndrome(void)
+
+**Description**
+
+This API performs reads the value of the reset syndrome register that has been
+mirrored after the last reset.
+
+**Parameter**
+
+- ``void`` - None
+
+**Return Values**
+
+- ``uint32_t`` - The value of the reset syndrome register, usually a full 32 bits register
+
+**Note**
+
+None
+
+tfm_hal_clear_reset_syndrome_bit()
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Prototype**
+
+.. code-block:: c
+
+  void tfm_hal_clear_reset_syndrome_bit(uint8_t bit_pos)
+
+**Description**
+
+This API performs clears a specific bit of the reset syndrome register passed as input.
+
+**Parameter**
+
+- ``uint8_t bit_pos`` - Bit position to clear on the reset syndrome register
+
+**Return Values**
+
+- ``void`` - None
+
+**Note**
+
+None
 
 tfm_hal_system_halt()
 ^^^^^^^^^^^^^^^^^^^^^
@@ -594,6 +652,49 @@ to enable it.
 
 - ``TFM_HAL_SUCCESS`` - Booting has been successful.
 - ``TFM_HAL_ERROR_GENERIC`` - Error occurred.
+
+tfm_hal_shared_metadata_rw_enable()
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+**Prototype**
+
+.. code-block:: c
+
+  void tfm_hal_shared_metadata_rw_enable(void);
+
+**Description**
+
+This API enables Read-Write access to the shared metadata section.
+Available when CONFIG_TFM_PARTITION_META_DYNAMIC_ISOLATION is set to 1.
+
+**Return Values**
+
+- ``void`` - None
+
+**Note**
+
+This API is only available if CONFIG_TFM_PARTITION_META_DYNAMIC_ISOLATION is enabled.
+
+tfm_hal_shared_metadata_rw_disable()
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+**Prototype**
+
+.. code-block:: c
+
+  void tfm_hal_shared_metadata_rw_disable(void);
+
+**Description**
+
+This API disables Read-Write access to the shared metadata section, restoring
+Read-Only access.
+Available when CONFIG_TFM_PARTITION_META_DYNAMIC_ISOLATION is set to 1.
+
+**Return Values**
+
+- ``void`` - None
+
+**Note**
+
+This API is only available if CONFIG_TFM_PARTITION_META_DYNAMIC_ISOLATION is enabled.
 
 Log API
 =======

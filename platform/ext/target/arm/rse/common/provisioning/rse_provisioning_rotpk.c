@@ -11,10 +11,11 @@
 #include "device_definition.h"
 #include "rse_provisioning_config.h"
 #include "rse_provisioning_tci_key.h"
-#include "crypto.h"
+#include "bl1_crypto.h"
 #include "cc3xx_drv.h"
 #include "rse_rotpk_policy.h"
 #include "rse_rotpk_mapping.h"
+#include "rse_asn1_encoding.h"
 
 #ifdef RSE_PROVISIONING_ENABLE_ECDSA_SIGNATURES
 
@@ -32,27 +33,40 @@ extern const size_t pci_rotpk_y_len;
 #define TEST_STATIC static
 #endif
 
-static inline bool use_cm_rotpk(const struct rse_provisioning_message_blob_t *blob)
+static bool message_check_cm_rotpk_lcs(enum lcm_lcs_t lcs)
 {
-    bool rotpk_not_in_rom, use_cm_rotpk;
-
-    rotpk_not_in_rom = ((blob->metadata >> RSE_PROVISIONING_BLOB_DETAILS_SIGNATURE_OFFSET)
-                       & RSE_PROVISIONING_BLOB_DETAILS_SIGNATURE_MASK)
-                       == RSE_PROVISIONING_BLOB_SIGNATURE_ROTPK_NOT_IN_ROM;
-    use_cm_rotpk = ((blob->metadata >> RSE_PROVISIONING_BLOB_DETAILS_NON_ROM_PK_TYPE_OFFSET)
-                   & RSE_PROVISIONING_BLOB_DETAILS_NON_ROM_PK_TYPE_MASK)
-                   == RSE_PROVISIONING_BLOB_DETAILS_NON_ROM_PK_TYPE_CM_ROTPK;
-
-    return rotpk_not_in_rom && use_cm_rotpk;
+    switch (lcs) {
+    case LCM_LCS_DM:
+        return true;
+#if defined(RSE_NON_ENDORSED_DM_PROVISIONING) || \
+    defined(RSE_ENDORSEMENT_CERTIFICATE_PROVISIONING) || \
+    defined(RSE_ROTPK_REVOCATION)
+    case LCM_LCS_SE:
+        return true;
+#endif
+    default:
+        return false;
+    }
 }
 
-static enum tfm_plat_err_t get_key_hash_from_otp(enum tfm_otp_element_id_t id,
-                                                 uint8_t *cm_rotpk_hash,
+static bool message_check_dm_rotpk_lcs(enum lcm_lcs_t lcs)
+{
+    switch (lcs) {
+#if defined(RSE_ROTPK_REVOCATION)
+    case LCM_LCS_SE:
+        return true;
+#endif
+    default:
+        return false;
+    }
+}
+
+static enum tfm_plat_err_t get_key_hash_from_otp(enum tfm_otp_element_id_t id, uint8_t *rotpk_hash,
                                                  enum rse_rotpk_hash_alg *alg)
 {
     enum tfm_plat_err_t err;
 
-    err = tfm_plat_otp_read(id, RSE_ROTPK_MAX_SIZE, cm_rotpk_hash);
+    err = tfm_plat_otp_read(id, RSE_ROTPK_MAX_SIZE, rotpk_hash);
     if (err != TFM_PLAT_ERR_SUCCESS) {
         return err;
     }
@@ -65,100 +79,52 @@ static enum tfm_plat_err_t get_key_hash_from_otp(enum tfm_otp_element_id_t id,
     return err;
 }
 
-/* X.509 RFC 5280 object identifier definitions */
-#define OID_ID_EC_PUBLIC_KEY "\x2A\x86\x48\xCE\x3D\x02\x01"  /* 1.2.840.10045.2.1 */
-#define OID_SECP256R1        "\x2A\x86\x48\xCE\x3D\x03\x01\x07"  /* 1.2.840.10045.3.1.7 (P-256) */
-#define OID_SECP384R1        "\x2B\x81\x04\x00\x22"  /* 1.3.132.0.34 (P-384) */
-
 TEST_STATIC
 enum tfm_plat_err_t get_asn1_from_raw_ec(const uint8_t *x, size_t x_size, const uint8_t *y,
-                                         size_t y_size, cc3xx_ec_curve_id_t curve_id,
-                                         uint8_t *asn1_key, size_t *len)
+                                         size_t y_size, enum tfm_bl1_ecdsa_curve_t curve_id,
+                                         uint8_t *asn1_key, size_t asn1_key_size, size_t *len)
 {
-    uint8_t *key_ptr = asn1_key;
-    const uint8_t *oid_curve;
-    size_t oid_curve_len;
-    uint8_t *p_len, *p_bitlen, *p_alglen;
-    const size_t oid_pub_len = sizeof(OID_ID_EC_PUBLIC_KEY) - 1;
+    enum rse_asn1_ecdsa_public_key_curve asn1_curve;
+    struct rse_asn1_pk_s asn1_pk;
 
     switch (curve_id) {
-    case CC3XX_EC_CURVE_SECP_256_R1:
-        oid_curve = (const uint8_t *)OID_SECP256R1;
-        oid_curve_len = sizeof(OID_SECP256R1) - 1;
+    case TFM_BL1_CURVE_P256:
+        asn1_curve = RSE_ASN1_ECDSA_PUBLIC_KEY_CURVE_SECP256R1;
         break;
-    case CC3XX_EC_CURVE_SECP_384_R1:
-        oid_curve = (const uint8_t *)OID_SECP384R1;
-        oid_curve_len = sizeof(OID_SECP384R1) - 1;
+    case TFM_BL1_CURVE_P384:
+        asn1_curve = RSE_ASN1_ECDSA_PUBLIC_KEY_CURVE_SECP384R1;
         break;
     default:
-        return TFM_PLAT_ERR_PROVISIONING_BLOB_INVALID_CURVE;
+        return TFM_PLAT_ERR_PROVISIONING_AUTH_MSG_INVALID_CURVE;
     }
 
-    /* Start SEQUENCE (SubjectPublicKeyInfo) */
-    *key_ptr++ = 0x30;
-    p_len = key_ptr;
-    key_ptr++;
+    asn1_pk = (struct rse_asn1_pk_s) {
+        .public_key_x = (uint32_t *)x,
+        .public_key_x_size = x_size,
+        .public_key_y = (uint32_t *)y,
+        .public_key_y_size = y_size,
+    };
 
-    /* AlgorithmIdentifier SEQUENCE */
-    *key_ptr++ = 0x30;
-    p_alglen = key_ptr;
-    key_ptr++;
-
-    /* OID for id-ecPublicKey */
-    *key_ptr++ = 0x06;
-    *key_ptr++ = oid_pub_len;
-    memcpy(key_ptr, OID_ID_EC_PUBLIC_KEY, oid_pub_len);
-    key_ptr += oid_pub_len;
-
-    /* OID for curve (P-256 or P-384) */
-    *key_ptr++ = 0x06;
-    *key_ptr++ = oid_curve_len;
-    memcpy(key_ptr, oid_curve, oid_curve_len);
-    key_ptr += oid_curve_len;
-
-    *p_alglen = key_ptr - (p_alglen + 1);
-
-    /* BIT STRING for public key */
-    *key_ptr++ = 0x03;
-    p_bitlen = key_ptr;
-    key_ptr++;
-    *key_ptr++ = 0x00;
-
-    /* Uncompressed public key (0x04 || X || Y) */
-    *key_ptr++ = 0x04;
-    memcpy(key_ptr, x, x_size);
-    key_ptr += x_size;
-    memcpy(key_ptr, y, y_size);
-    key_ptr += y_size;
-
-    *p_bitlen = key_ptr - (p_bitlen + 1);
-    *p_len = key_ptr - (p_len + 1);
-
-    *len = key_ptr - asn1_key;
-
-    return TFM_PLAT_ERR_SUCCESS;
+    return rse_asn1_ecdsa_public_key_get(asn1_key, asn1_key_size, asn1_curve, &asn1_pk, len);
 }
 
 static enum tfm_plat_err_t
-calc_key_hash_from_blob(const struct rse_provisioning_message_blob_t *blob, uint8_t *key_hash,
-                        enum rse_rotpk_hash_alg alg, size_t point_size)
+calc_key_hash_from_header(const struct rse_provisioning_authentication_header_t *header,
+                          uint8_t *key_hash, enum rse_rotpk_hash_alg alg, size_t point_size)
 {
-    fih_int fih_rc;
     enum tfm_plat_err_t err;
     /* Max size is 120 bytes */
     uint8_t asn1_key[120];
     size_t len;
-    enum tfm_bl1_hash_alg_t bl1_hash_alg;
+    psa_algorithm_t hash_alg;
+    psa_status_t status;
 
     /* Currently keys stored in CM ROTPK are in the form of hashed DER encoded,
      * ASN.1 format keys. Therefore we need to convert the key we have found
      * in the blob to this format, before hashing it */
-    err = get_asn1_from_raw_ec(blob->public_key,
-                               point_size,
-                               blob->public_key + point_size,
-                               point_size,
-                               RSE_PROVISIONING_CURVE,
-                               asn1_key,
+    err = get_asn1_from_raw_ec(header->public_key, point_size,
+                               header->public_key + point_size,
+                               point_size, RSE_PROVISIONING_CURVE, asn1_key, sizeof(asn1_key),
                                &len);
     if (err != TFM_PLAT_ERR_SUCCESS) {
         return err;
@@ -166,31 +132,50 @@ calc_key_hash_from_blob(const struct rse_provisioning_message_blob_t *blob, uint
 
     switch (alg) {
     case RSE_ROTPK_HASH_ALG_SHA256:
-        bl1_hash_alg = TFM_BL1_HASH_ALG_SHA256;
+        hash_alg = PSA_ALG_SHA_256;
         break;
     case RSE_ROTPK_HASH_ALG_SHA384:
-        bl1_hash_alg = TFM_BL1_HASH_ALG_SHA384;
+        hash_alg = PSA_ALG_SHA_384;
         break;
     default:
-        return TFM_PLAT_ERR_PROVISIONING_BLOB_INVALID_HASH_ALG;
+        return TFM_PLAT_ERR_PROVISIONING_AUTH_MSG_INVALID_HASH_ALG;
     }
 
-    FIH_CALL(bl1_hash_compute, fih_rc, bl1_hash_alg, asn1_key, len, key_hash, RSE_ROTPK_MAX_SIZE,
-             &len);
-    if (fih_not_eq(fih_rc, FIH_SUCCESS)) {
-        return (enum tfm_plat_err_t)fih_rc;
+    status = psa_hash_compute(hash_alg, asn1_key, len,
+                              key_hash, RSE_ROTPK_MAX_SIZE, &len);
+    if (status != PSA_SUCCESS) {
+        return (enum tfm_plat_err_t)status;
     }
 
     return TFM_PLAT_ERR_SUCCESS;
 }
 
-static enum tfm_plat_err_t get_check_hash_cm_rotpk(const struct rse_provisioning_message_blob_t *blob,
-                                                   uint32_t **public_key_x,
-                                                   size_t *public_key_x_size,
-                                                   uint32_t **public_key_y,
-                                                   size_t *public_key_y_size)
+/**
+ * @brief Convert from BL1 curve to CC3XX curve (driver_specific)
+ *
+ * @param[in] bl1_curve BL1 curve to translate to a CC3XX curve
+ *
+ * @return cc3xx_ec_curve_id_t Converted curve as interpreted by CC3XX driver
+ */
+TEST_STATIC
+cc3xx_ec_curve_id_t bl1_curve_to_cc3xx_curve(enum tfm_bl1_ecdsa_curve_t bl1_curve)
 {
-    uint16_t cm_rotpk_num;
+    switch(bl1_curve) {
+    case TFM_BL1_CURVE_P256:
+        return CC3XX_EC_CURVE_SECP_256_R1;
+    case TFM_BL1_CURVE_P384:
+        return CC3XX_EC_CURVE_SECP_384_R1;
+    default:
+        return _CURVE_ID_MAX;
+    };
+}
+
+static enum tfm_plat_err_t
+get_check_hash_cm_dm_rotpk(const struct rse_provisioning_authentication_header_t *header,
+                           uint32_t **public_key_x, size_t *public_key_x_size,
+                           uint32_t **public_key_y, size_t *public_key_y_size, bool cm_rotpk)
+{
+    uint16_t rotpk_num;
     enum tfm_otp_element_id_t id;
     enum tfm_plat_err_t err;
     uint8_t key_hash_from_otp[RSE_ROTPK_MAX_SIZE];
@@ -198,36 +183,70 @@ static enum tfm_plat_err_t get_check_hash_cm_rotpk(const struct rse_provisioning
     uint32_t point_size;
     enum rse_rotpk_hash_alg hash_alg;
 
-    cm_rotpk_num = (blob->metadata >> RSE_PROVISIONING_BLOB_DETAILS_CM_ROTPK_NUMBER_OFFSET)
-                   & RSE_PROVISIONING_BLOB_DETAILS_CM_ROTPK_NUMBER_MASK;
-    id = PLAT_OTP_ID_CM_ROTPK + cm_rotpk_num;
+    rotpk_num = (header->metadata >> RSE_PROVISIONING_AUTH_MSG_DETAILS_CM_ROTPK_NUMBER_OFFSET) &
+                RSE_PROVISIONING_AUTH_MSG_DETAILS_CM_ROTPK_NUMBER_MASK;
+    id = (cm_rotpk ? PLAT_OTP_ID_CM_ROTPK : PLAT_OTP_ID_DM_ROTPK) + rotpk_num;
 
-    if (id >= PLAT_OTP_ID_CM_ROTPK_MAX) {
-        return TFM_PLAT_ERR_PROVISIONING_BLOB_INVALID_CM_ROTPK;
+    if (id >= (cm_rotpk ? PLAT_OTP_ID_CM_ROTPK_MAX : PLAT_OTP_ID_DM_ROTPK_MAX)) {
+        return TFM_PLAT_ERR_PROVISIONING_AUTH_MSG_INVALID_CM_ROTPK;
     }
 
-    point_size = cc3xx_lowlevel_ec_get_modulus_size_from_curve(RSE_PROVISIONING_CURVE);
+    point_size = cc3xx_lowlevel_ec_get_modulus_size_from_curve(
+                            bl1_curve_to_cc3xx_curve(RSE_PROVISIONING_CURVE));
 
     err = get_key_hash_from_otp(id, key_hash_from_otp, &hash_alg);
     if (err != TFM_PLAT_ERR_SUCCESS) {
         return err;
     }
 
-    err = calc_key_hash_from_blob(blob, key_hash_from_blob, hash_alg, point_size);
+    err = calc_key_hash_from_header(header, key_hash_from_blob, hash_alg, point_size);
     if (err != TFM_PLAT_ERR_SUCCESS) {
         return err;
     }
 
     if (memcmp(key_hash_from_otp, key_hash_from_blob, RSE_ROTPK_SIZE_FROM_ALG(hash_alg))) {
-        return TFM_PLAT_ERR_PROVISIONING_BLOB_INVALID_HASH_VALUE;
+        return TFM_PLAT_ERR_PROVISIONING_AUTH_MSG_INVALID_HASH_VALUE;
     }
 
-    *public_key_x = (uint32_t *)blob->public_key;
+    *public_key_x = (uint32_t *)header->public_key;
     *public_key_x_size = point_size;
-    *public_key_y = (uint32_t *)(blob->public_key + point_size);
+    *public_key_y = (uint32_t *)(header->public_key + point_size);
     *public_key_y_size = point_size;
 
     return TFM_PLAT_ERR_SUCCESS;
+}
+
+static enum tfm_plat_err_t
+get_non_rom_rotpk(const struct rse_provisioning_authentication_header_t *header,
+                  uint32_t **public_key_x, size_t *public_key_x_size, uint32_t **public_key_y,
+                  size_t *public_key_y_size)
+{
+    enum lcm_lcs_t lcs;
+    enum lcm_error_t lcm_err;
+
+    lcm_err = lcm_get_lcs(&LCM_DEV_S, &lcs);
+    if (lcm_err != LCM_ERROR_NONE) {
+        return (enum tfm_plat_err_t)lcm_err;
+    }
+
+    switch (provisioning_rotpk_get_non_rom_rotpk_config(header)) {
+    case RSE_PROVISIONING_AUTH_MSG_DETAILS_NON_ROM_PK_TYPE_CM_ROTPK:
+        if (!message_check_cm_rotpk_lcs(lcs)) {
+            return TFM_PLAT_ERR_PROVISIONING_AUTH_MSG_INVALID_CM_ROTPK_LCS;
+        }
+
+        return get_check_hash_cm_dm_rotpk(header, public_key_x, public_key_x_size, public_key_y,
+                                          public_key_y_size, true);
+    case RSE_PROVISIONING_AUTH_MSG_DETAILS_NON_ROM_PK_TYPE_DM_ROTPK:
+        if (!message_check_dm_rotpk_lcs(lcs)) {
+            return TFM_PLAT_ERR_PROVISIONING_AUTH_MSG_INVALID_DM_ROTPK_LCS;
+        }
+
+        return get_check_hash_cm_dm_rotpk(header, public_key_x, public_key_x_size, public_key_y,
+                                          public_key_y_size, false);
+    default:
+        return TFM_PLAT_ERR_PROVISIONING_AUTH_MSG_INVALID_NOT_IN_ROM_ROTPK_CONFIG;
+    }
 }
 
 static enum tfm_plat_err_t get_rom_rotpk(uint32_t **public_key_x,
@@ -267,38 +286,17 @@ static enum tfm_plat_err_t get_rom_rotpk(uint32_t **public_key_x,
     return TFM_PLAT_ERR_SUCCESS;
 }
 
-enum tfm_plat_err_t provisioning_rotpk_get(const struct rse_provisioning_message_blob_t *blob,
+enum tfm_plat_err_t provisioning_rotpk_get(const struct rse_provisioning_authentication_header_t *header,
                                            uint32_t **public_key_x,
                                            size_t *public_key_x_size,
                                            uint32_t **public_key_y,
                                            size_t *public_key_y_size)
 {
-    enum lcm_error_t lcm_err;
-    enum lcm_lcs_t lcs;
-    bool valid_lcs;
-
-    lcm_err = lcm_get_lcs(&LCM_DEV_S, &lcs);
-    if (lcm_err != LCM_ERROR_NONE) {
-        return (enum tfm_plat_err_t)lcm_err;
+    if (provisioning_rotpk_is_non_rom(header)) {
+        return get_non_rom_rotpk(header, public_key_x, public_key_x_size, public_key_y,
+                                 public_key_y_size);
     }
 
-    valid_lcs = (lcs == LCM_LCS_DM);
-
-#ifdef RSE_NON_ENDORSED_DM_PROVISIONING
-    valid_lcs = valid_lcs || (lcs == LCM_LCS_SE);
-#endif
-
-    if (valid_lcs && use_cm_rotpk(blob)) {
-        return get_check_hash_cm_rotpk(blob,
-                                       public_key_x,
-                                       public_key_x_size,
-                                       public_key_y,
-                                       public_key_y_size);
-    }
-
-    return get_rom_rotpk(public_key_x,
-                         public_key_x_size,
-                         public_key_y,
-                         public_key_y_size);
+    return get_rom_rotpk(public_key_x, public_key_x_size, public_key_y, public_key_y_size);
 }
 #endif

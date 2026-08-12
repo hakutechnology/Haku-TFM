@@ -13,7 +13,7 @@ endif()
 
 set(CMAKE_C_COMPILER ${CROSS_COMPILE}-gcc)
 set(CMAKE_C_COMPILER_FORCED TRUE)
-set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD 11)
 
 set(CMAKE_ASM_COMPILER ${CMAKE_C_COMPILER})
 
@@ -47,19 +47,6 @@ endfunction()
 min_toolchain_version("cortex-m85" "13.0.0")
 min_toolchain_version("cortex-m52" "14.2.0")
 
-# GNU Arm compiler version greater equal than *11.3.Rel1*
-# has a linker issue that required system calls are missing,
-# such as _read and _write. Add stub functions of required
-# system calls to solve this issue.
-#
-# READONLY linker script attribute is not supported in older
-# GNU Arm compilers. For these version the preprocessor will
-# remove the READONLY string from the linker scripts.
-if (CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 11.3.1)
-    set(CONFIG_GNU_SYSCALL_STUB_ENABLED TRUE)
-    set(CONFIG_GNU_LINKER_READONLY_ATTRIBUTE TRUE)
-endif()
-
 if(CONFIG_TFM_FLOAT_ABI STREQUAL "hard")
     add_compile_options(-mfloat-abi=hard)
     add_link_options(-mfloat-abi=hard)
@@ -79,27 +66,26 @@ file(REAL_PATH "${CMAKE_SOURCE_DIR}/../" TOP_LEVEL_PROJECT_DIR)
 add_compile_options(
     -Wall
     -Wno-format
+    -Warray-parameter
     -Wno-unused-but-set-variable
     -Wnull-dereference
     -Wno-error=incompatible-pointer-types
-    -c
     -fdata-sections
     -ffunction-sections
     -fno-builtin
-    -fshort-enums
     -funsigned-char
     # Strip /workspace/
     -fmacro-prefix-map=${TOP_LEVEL_PROJECT_DIR}/=
     # Strip /workspace/trusted-firmware-m
     -fmacro-prefix-map=${CMAKE_SOURCE_DIR}/=
     -mthumb
-    $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<BOOL:${TFM_DEBUG_SYMBOLS}>>:-g>
+    $<$<COMPILE_LANGUAGE:C,CXX>:-g>
     $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<BOOL:${TFM_DEBUG_OPTIMISATION}>,$<CONFIG:Debug>>:-Og>
     $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<BOOL:${CONFIG_TFM_WARNINGS_ARE_ERRORS}>>:-Werror>
 )
 
 add_link_options(
-    -mcpu=${TFM_SYSTEM_PROCESSOR}
+    -mcpu=${TFM_SYSTEM_PROCESSOR_FEATURED}
     -specs=nano.specs
     -specs=nosys.specs
     LINKER:-check-sections
@@ -153,7 +139,8 @@ macro(target_add_scatter_file target)
 
     set_source_files_properties(${scatter_file} PROPERTIES
         LANGUAGE C
-        KEEP_EXTENSION True)
+        KEEP_EXTENSION True # Don't use .o extension for the preprocessed file
+    )
 
     target_compile_options(${target}_scatter
         PRIVATE
@@ -162,10 +149,7 @@ macro(target_add_scatter_file target)
             -xc
     )
 
-    target_compile_definitions(${target}_scatter
-        PRIVATE
-            $<$<NOT:$<BOOL:${CONFIG_GNU_LINKER_READONLY_ATTRIBUTE}>>:READONLY=>
-    )
+    set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS $<TARGET_OBJECTS:${target}_scatter>)
 
     target_link_libraries(${target}_scatter
         PRIVATE
@@ -184,10 +168,21 @@ endmacro()
 # Macro for converting the output *.axf file to finary files: bin, elf, hex
 macro(add_convert_to_bin_target target)
     get_target_property(bin_dir ${target} RUNTIME_OUTPUT_DIRECTORY)
+
     add_custom_target(${target}_bin
-        ALL DEPENDS ${target}
+        ALL SOURCES ${bin_dir}/${target}.bin
+        SOURCES ${bin_dir}/${target}.elf
+        SOURCES ${bin_dir}/${target}.hex
+    )
+
+    add_custom_command(OUTPUT ${bin_dir}/${target}.bin
+        OUTPUT ${bin_dir}/${target}.elf
+        OUTPUT ${bin_dir}/${target}.hex
+        DEPENDS ${target}
         COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${target}> ${bin_dir}/${target}.bin
         COMMAND ${CMAKE_OBJCOPY} -O elf32-littlearm $<TARGET_FILE:${target}> ${bin_dir}/${target}.elf
         COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${target}> ${bin_dir}/${target}.hex
     )
+
+    add_imported_target(${target}_hex ${target}_bin "${bin_dir}/${target}.hex")
 endmacro()

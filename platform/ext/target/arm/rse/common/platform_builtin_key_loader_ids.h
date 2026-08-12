@@ -15,7 +15,10 @@
 extern "C" {
 #endif
 
-#define TFM_BUILTIN_MAX_KEY_LEN RSE_OTP_ROTPK_MAX_SIZE
+/* ECC key pair size for IAK is the largest builtin key,
+ * dictated by `ATTEST_KEY_BITS` and is set to `384` (i.e 48 bytes)
+ */
+#define TFM_BUILTIN_MAX_KEY_LEN 48
 
 enum psa_drv_slot_number_t {
     TFM_BUILTIN_KEY_SLOT_HUK = 0,
@@ -26,6 +29,9 @@ enum psa_drv_slot_number_t {
 #ifdef TFM_PARTITION_DPE
     TFM_BUILTIN_KEY_SLOT_ROT_CDI,
 #endif /* TFM_PARTITION_DPE */
+#ifdef TEST_S_RSE_IMAGE_VERIFICATION
+    TFM_BUILTIN_KEY_SLOT_RIV_TEST_KEY,
+#endif /* TEST_S_RSE_IMAGE_VERIFICATION */
     TFM_BUILTIN_KEY_SLOT_HOST_CM_MIN,
     TFM_BUILTIN_KEY_SLOT_HOST_CM_MAX = TFM_BUILTIN_KEY_SLOT_HOST_CM_MIN + RSE_ROTPK_CM_HOST_AMOUNT,
     TFM_BUILTIN_KEY_SLOT_HOST_DM_MIN,

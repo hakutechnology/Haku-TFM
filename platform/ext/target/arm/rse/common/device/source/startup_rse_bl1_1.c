@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024 Arm Limited. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -20,17 +20,13 @@
  * This file is derivative of CMSIS V5.9.0 startup_ARMCM55.c
  * Git SHA: 2b7495b8535bdcb306dac29b9ded4cfb679d7e5c
  */
-#include "bl1_random.h"
-#include "tfm_hal_device_header.h"
-#include "device_definition.h"
-#include "region_defs.h"
-#include "rse_kmu_slot_ids.h"
-#include "rse_persistent_data.h"
-#if defined(RSE_ENABLE_TRAM)
-#include "tram_drv.h"
-#include "uart_stdout.h"
-#endif
 #include "sam_interrupts.h"
+#include "tfm_hal_device_header.h"
+#include "region_defs.h"
+#include "startup_bl1_1_helpers.h"
+#include "rse_persistent_data.h"
+
+#include <stdint.h>
 
 /*----------------------------------------------------------------------------
   External References
@@ -129,8 +125,8 @@ extern const VECTOR_TABLE_Type __VECTOR_TABLE[];
   0,                                 /*  31: Reserved */
 
   /* External interrupts */
-  SAM_Critical_Sec_Fault_S_Handler,  /*  32: SAM Critical Security Fault (Secure) Handler */
-  SAM_Sec_Fault_S_Handler,           /*  33: SAM Security Fault (Secure) Handler */
+  SAM_Critical_Sev_Fault_S_Handler,  /*  32: SAM Critical Severity Fault (Secure) Handler */
+  SAM_Sev_Fault_S_Handler,           /*  33: SAM Severe Fault (Secure) Handler */
   invalid_irq_handler,               /*  34: GPIO Combined (Secure) Handler */
   invalid_irq_handler,               /*  35: Secure Debug Channel Handler */
   invalid_irq_handler,               /*  36: FPU Exception Handler */
@@ -199,97 +195,66 @@ extern const VECTOR_TABLE_Type __VECTOR_TABLE[];
 #pragma GCC diagnostic pop
 #endif
 
-#ifdef RSE_ENABLE_TRAM
-/*
- * This can't be inlined, since the stack push to get space for the local
- * variables is done at the start of the function, and the function which calls
- * this includes an explicit stack set which removes the space allocated for
- * locals.
- */
-static void __attribute__ ((noinline)) setup_tram_encryption(void) {
-    enum lcm_bool_t sp_enabled;
-    enum lcm_lcs_t lcs;
-    uint32_t random_word;
-    uint32_t idx;
-    uint8_t tram_key[TRAM_KEY_SIZE];
-    uint8_t prbg_seed[KMU_PRBG_SEED_LEN];
+static inline void __attribute__ ((always_inline)) setup_tram_encryption(void)
+{
+    startup_fill_cc3xx_rng_ehr_buffers();
 
-    const struct kmu_key_export_config_t tram_key_export_config = {
-        .export_address = TRAM_BASE_S + 0x8, /* TRAM key register */
-        .destination_port_write_delay = 0, /* No delay */
-        .destination_port_address_increment = 0x01, /* Increment by 4 bytes with each write */
-        .destination_port_data_width_code = KMU_DESTINATION_PORT_WIDTH_32_BITS, /* Write 32 bits with each write */
-        .destination_port_data_writes_code = KMU_DESTINATION_PORT_WIDTH_8_WRITES, /* Perform 8 writes (total 256 bits) */
-        .new_mask_for_next_key_writes = true,  /* refresh the masking */
-        .write_mask_disable = false, /* Don't disable the masking */
-    };
+    startup_delay(P_CC3XX->rng.ehr_data[0] & 0x1F);
 
-    /* Redefine these, as at this point the constants haven't been loaded */
-    struct kmu_dev_cfg_t kmu_dev_cfg_s = {.base = KMU_BASE_S};
-    struct kmu_dev_t kmu_dev_s = {.cfg = &kmu_dev_cfg_s};
-    struct tram_dev_cfg_t tram_dev_cfg_s = {.base = TRAM_BASE_S};
-    struct tram_dev_t tram_dev_s = {.cfg = &tram_dev_cfg_s};
-    struct lcm_dev_cfg_t lcm_dev_cfg_s = {.base = LCM_BASE_S};
-    struct lcm_dev_t lcm_dev_s = {.cfg = &lcm_dev_cfg_s};
+    /* Set TRAM keys */
+    TRAM_TRKEY(0) = P_CC3XX->rng.ehr_data[1];
+    TRAM_TRKEY(1) = P_CC3XX->rng.ehr_data[2];
+    TRAM_TRKEY(2) = P_CC3XX->rng.ehr_data[3];
+    TRAM_TRKEY(3) = P_CC3XX->rng.ehr_data[4];
+    TRAM_TRKEY(4) = P_CC3XX->rng.ehr_data[5];
 
-    stdio_is_initialized_reset();
+    startup_fill_cc3xx_rng_ehr_buffers();
 
-    /* generate a random word to clear secret values */
-    while (bl1_random_generate_noise((uint8_t *)&random_word, sizeof(random_word)));
+    TRAM_TRKEY(5) = P_CC3XX->rng.ehr_data[0];
+    TRAM_TRKEY(6) = P_CC3XX->rng.ehr_data[1];
+    TRAM_TRKEY(7) = P_CC3XX->rng.ehr_data[2];
 
-    lcm_get_sp_enabled(&lcm_dev_s, &sp_enabled);
-    lcm_get_lcs(&lcm_dev_s, &lcs);
+    startup_delay(P_CC3XX->rng.ehr_data[3] & 0x1F);
 
-    while (bl1_random_generate_noise(prbg_seed, sizeof(prbg_seed)));
-    kmu_init(&kmu_dev_s, prbg_seed);
+    /* Enable TRAM */
+    TRAM_TRC |= 0x1;
 
-    /* Clear PRBG seed from the stack */
-    for (idx = 0; idx < KMU_PRBG_SEED_LEN / sizeof(uint32_t); idx++) {
-        ((uint32_t *)prbg_seed)[idx] = random_word;
+    /* Redundant checks for TRAM enablement for FIH*/
+    TRAM_TRC |= 0x1;
+    if((!(TRAM_TRC & 0x1)) || (!(TRAM_TRC & 0x1))) {
+        FIH_PANIC;
     }
 
-    /* The secure provisioning reset resets the KMU which wipes the keyslots,
-     * but it's still a warm reset so the DMA ICS doesn't run. Because of this,
-     * we need to generate a new TRAM key.
-     */
-    if (sp_enabled == LCM_TRUE && (lcs == LCM_LCS_CM || lcs == LCM_LCS_DM)) {
-        while (bl1_random_generate_noise(tram_key, sizeof(tram_key)));
+    startup_dma_double_word_memset(DTCM_CPU0_BASE_S, DTCM_SIZE, P_CC3XX->rng.ehr_data[4]);
+    wait_for_dma_operation_complete();
 
-        kmu_set_key(&kmu_dev_s, RSE_KMU_SLOT_TRAM_KEY, tram_key, sizeof(tram_key));
+    startup_dma_double_word_memset(ITCM_CPU0_BASE_S, ITCM_SIZE, 0x0);
+    wait_for_dma_operation_complete();
+}
 
-        /* Clear TRAM key from the stack */
-        for (idx = 0; idx < TRAM_KEY_SIZE / sizeof(uint32_t); idx++) {
-           ((uint32_t *)tram_key)[idx] = random_word;
-        }
+#if !(defined(RSE_BL1_TEST_BINARY) && defined(RSE_TEST_BINARY_IN_SRAM))
+static inline void __attribute__ ((always_inline)) erase_vm0_and_vm1(void)
+{
+    register uint32_t vm_erase_size __asm("r0");
 
-        /* generate a random word to initialise the DTCM */
-        while (bl1_random_generate_noise((uint8_t *)&random_word, sizeof(random_word)));
+    if (RSE_GET_PERSISTENT_DATA_INITIALIZED_FLAG()) {
+        vm_erase_size = (VM0_SIZE + VM1_SIZE - VM_COLD_RESET_RETAINED_SIZE);
+    } else {
+        vm_erase_size = (VM0_SIZE + VM1_SIZE);
     }
 
-    kmu_set_key_export_config(&kmu_dev_s, RSE_KMU_SLOT_TRAM_KEY, &tram_key_export_config);
-    kmu_set_key_export_config_locked(&kmu_dev_s, RSE_KMU_SLOT_TRAM_KEY);
-    kmu_set_key_locked(&kmu_dev_s, RSE_KMU_SLOT_TRAM_KEY);
-    kmu_export_key(&kmu_dev_s, RSE_KMU_SLOT_TRAM_KEY);
-
-    tram_enable_encryption(&tram_dev_s);
-
-    if (sp_enabled == LCM_TRUE && (lcs == LCM_LCS_CM || lcs == LCM_LCS_DM)) {
-        for (idx = 0; idx < DTCM_SIZE / sizeof(uint32_t); idx++) {
-            ((uint32_t *)DTCM_BASE_S)[idx] = random_word;
-        }
-
-        /* Clear it from the stack */
-        random_word = 0;
+    if (vm_erase_size == 0) {
+        return;
     }
 
-    stdio_is_initialized_reset();
-};
-#endif /* RSE_ENABLE_TRAM */
+    startup_dma_double_word_memset(VM0_BASE_S, vm_erase_size , 0x0);
+}
+#endif /* !(RSE_BL1_TEST_BINARY && RSE_TEST_BINARY_IN_SRAM) */
 
 /*----------------------------------------------------------------------------
   Reset Handler called on controller reset
  *----------------------------------------------------------------------------*/
-void Reset_Handler(void)
+void __NO_RETURN Reset_Handler(void)
 {
 #ifdef RSE_SUPPORT_ROM_LIB_RELOCATION
     /*
@@ -299,30 +264,18 @@ void Reset_Handler(void)
     __asm volatile("ldr    r9, =__etext \n");
 #endif /* RSE_SUPPORT_ROM_LIB_RELOCATION */
 
-    /* Enable caching, particularly to avoid ECC errors in VM0/1 */
-    SCB_EnableICache();
-    SCB_EnableDCache();
-
     /* Disable No-Write Allocate mode for the DCache to avoid DCache being
      * bypassed when streaming mode is detected, e.g. during memset()
      */
     ICB->ACTLR |= ICB_ACTLR_DISNWAMODE_Msk;
 
-#ifdef RSE_ENABLE_TRAM
-    /* Set MSP to be in VM0 to start with */
-    __set_MSP(PROVISIONING_MESSAGE_START);
-    __set_MSPLIM(VM0_BASE_S);
-
     setup_tram_encryption();
 
-    /* Now switch back to the right stack (which is in the TRAM) */
-    __set_MSPLIM(0);
-    __set_MSP((uint32_t)(&__INITIAL_SP));
-#endif /* RSE_ENABLE_TRAM */
+#if !(defined(RSE_BL1_TEST_BINARY) && defined(RSE_TEST_BINARY_IN_SRAM))
+    erase_vm0_and_vm1();
+#endif
 
     __set_MSPLIM((uint32_t)(&__STACK_LIMIT));
-
-    rse_setup_persistent_data();
 
     SystemInit();                    /* CMSIS System Initialization */
     __PROGRAM_START();               /* Enter PreMain (C library entry point) */

@@ -1,5 +1,6 @@
 #-------------------------------------------------------------------------------
 # SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
+# Copyright (c) 2026 STMicroelectronics. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -23,10 +24,15 @@ target_sources(tfm_s
         ${STM_COMMON_DIR}/stm32wbaxx/Device/Source/startup_stm32wbaxx_s.c
 )
 
+target_sources(platform_s
+    PRIVATE
+        ${STM_COMMON_DIR}/hal/provision/otp_provision.c
+)
+
 if(NS)
 target_sources(${NS_TARGET_NAME}
-        PRIVATE
-            ${STM_COMMON_DIR}/stm32wbaxx/Device/Source/startup_stm32wbaxx_ns.c
+    PRIVATE
+        ${STM_COMMON_DIR}/stm32wbaxx/Device/Source/startup_stm32wbaxx_ns.c
     )
 endif()
 
@@ -55,18 +61,28 @@ install(DIRECTORY   ${TARGET_PLATFORM_PATH}/ns/
 install(DIRECTORY   ${TARGET_PLATFORM_PATH}/include
         DESTINATION ${INSTALL_PLATFORM_NS_DIR})
 
-install(FILES       ${TARGET_PLATFORM_PATH}/accelerator/crypto_accelerator_config.h
-DESTINATION ${INSTALL_PLATFORM_NS_DIR}/include)
-
 install(DIRECTORY   ${STM_COMMON_DIR}/hal/accelerator/
         DESTINATION ${INSTALL_PLATFORM_NS_DIR}/include
         FILES_MATCHING PATTERN "*.h")
 
 install(FILES
-    ${STM32WBA65I_DK_DIR}/partition/flash_layout.h
     ${STM32WBA65I_DK_DIR}/partition/region_defs.h
     DESTINATION ${INSTALL_PLATFORM_NS_DIR}/partition
 )
+
+# Install a flash_layout.h header file that consider STM32_FLASH_LAYOUT_BEGIN_OFFSET
+# TF-M was built with.
+install(FILES
+    ${STM32WBA65I_DK_DIR}/partition/flash_layout.h
+    DESTINATION ${INSTALL_PLATFORM_NS_DIR}/partition/gen_layout
+)
+
+file(WRITE ${CMAKE_BINARY_DIR}/generated/platform/partition/flash_layout.h
+  "#define STM32_FLASH_LAYOUT_BEGIN_OFFSET ${STM32_FLASH_LAYOUT_BEGIN_OFFSET}\n"
+  "#include \"gen_layout/flash_layout.h\"\n"
+)
+install(FILES       ${CMAKE_BINARY_DIR}/generated/platform/partition/flash_layout.h
+        DESTINATION ${INSTALL_PLATFORM_NS_DIR}/partition)
 
 install(DIRECTORY   ${PLATFORM_DIR}/ext/common
                     ${PLATFORM_DIR}/ext/driver
@@ -77,6 +93,9 @@ install(DIRECTORY   ${TARGET_PLATFORM_PATH}/tests
         DESTINATION ${INSTALL_PLATFORM_NS_DIR})
 
 # Extract firmware and OTP binary image files
+
+
+if(CMAKE_C_COMPILER_ID STREQUAL GNU)
 get_target_property(tfm_s_bin_dir tfm_s RUNTIME_OUTPUT_DIRECTORY)
 
 set(tfm_s_split_out
@@ -86,14 +105,6 @@ set(tfm_s_split_out
 
 add_custom_target(tfm_s_fmw ALL SOURCES ${tfm_s_split_out})
 
-if(CMAKE_C_COMPILER STREQUAL "iccarm")
-add_custom_command(
-  OUTPUT ${tfm_s_split_out}
-  DEPENDS tfm_s_bin
-  COMMAND ielftool --silent --exclude=.BL2_OTP --bin $<TARGET_FILE:tfm_s> ${tfm_s_bin_dir}/tfm_s_fmw.bin
-  COMMAND ielftool --silent --only=.BL2_OTP --bin $<TARGET_FILE:tfm_s> ${tfm_s_bin_dir}/tfm_s_otp.bin
-)
-else()
 add_custom_command(
   OUTPUT ${tfm_s_split_out}
   DEPENDS tfm_s_bin

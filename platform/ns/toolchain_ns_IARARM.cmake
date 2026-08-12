@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Copyright (c) 2023-2024, Arm Limited. All rights reserved.
+# SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -112,7 +112,7 @@ add_compile_options(
     $<$<COMPILE_LANGUAGE:C,CXX>:-D_NO_DEFINITIONS_IN_HEADER_FILES>
     $<$<COMPILE_LANGUAGE:C,CXX>:--diag_suppress=Pe546,Pe940,Pa082,Pa084>
     $<$<COMPILE_LANGUAGE:C,CXX>:--no_path_in_file_macros>
-    $<$<AND:$<COMPILE_LANGUAGE:C,CXX,ASM>,$<BOOL:${TFM_DEBUG_SYMBOLS}>,$<CONFIG:Release,MinSizeRel>>:-r>
+    $<$<AND:$<COMPILE_LANGUAGE:C,CXX,ASM>,$<CONFIG:Release,MinSizeRel>>:-r>
     $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<BOOL:${CONFIG_TFM_WARNINGS_ARE_ERRORS}>>:--warnings_are_errors>
 )
 
@@ -172,6 +172,7 @@ macro(target_add_scatter_file target)
     set_source_files_properties(${SCATTER_FILE_PATH}
         PROPERTIES
         LANGUAGE C
+        KEEP_EXTENSION True # Don't use .o extension for the preprocessed file
     )
 
     target_link_options(${target}
@@ -221,7 +222,7 @@ macro(add_convert_to_bin_target target)
             ${bin_dir}/${target}.elf
     )
 
-    add_custom_target(${target}_hex
+    add_custom_target(${target}_hex_build
         SOURCES ${bin_dir}/${target}.hex
     )
     add_custom_command(OUTPUT ${bin_dir}/${target}.hex
@@ -231,6 +232,8 @@ macro(add_convert_to_bin_target target)
             --ihex $<TARGET_FILE:${target}>
             ${bin_dir}/${target}.hex
     )
+
+    add_imported_target(${target}_hex ${target}_hex_build "${bin_dir}/${target}.hex")
 
     add_custom_target(${target}_binaries
         ALL

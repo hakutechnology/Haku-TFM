@@ -42,10 +42,6 @@ config MCUBOOT_EXECUTION_SLOT
     int "Slot from which to execute the image, used for XIP mode"
     default 1
 
-config MCUBOOT_USE_PSA_CRYPTO
-    bool "Enable cryptography through PSA Crypto APIs"
-    default n
-
 choice MCUBOOT_HW_KEY_CHOICE
     prompt "Hardware key options for signature verification"
     optional
@@ -144,15 +140,21 @@ config MCUBOOT_HW_ROLLBACK_PROT
     default y
 
 config MCUBOOT_ENC_IMAGES
-    bool "Enable encrypted image upgrade support"
-    default n
-
-config MCUBOOT_BOOTSTRAP
-    bool "Support initial state with empty primary slot and images installed from secondary slots"
+    bool "Enable image encryption (AES)"
     default n
 
 config MCUBOOT_ENCRYPT_RSA
-    bool "Use RSA for encrypted image upgrade support"
+    bool "Use RSA-OAEP for encryption key wrapping"
+    default n
+    depends on MCUBOOT_ENC_IMAGES
+
+config MCUBOOT_ENCRYPT_KW
+    bool "Use AES-KW for encryption key wrapping"
+    default n
+    depends on MCUBOOT_ENC_IMAGES
+
+config MCUBOOT_BOOTSTRAP
+    bool "Support initial state with empty primary slot and images installed from secondary slots"
     default n
 
 choice MCUBOOT_FIH_PROFILE_CHOICE
@@ -236,12 +238,8 @@ config MCUBOOT_ENC_KEY_LEN
     int "Length of the AES key for encrypting images"
     default 128
 
-config MCUBOOT_MBEDCRYPTO_CONFIG_FILEPATH
-    string "Mbed TLS config file to use with MCUboot"
-    default "$(TFM_SOURCE_DIR)/bl2/ext/mcuboot/config/mcuboot-mbedtls-cfg.h"
-
 config MCUBOOT_PSA_CRYPTO_CONFIG_FILEPATH
-    string "Mbed TLS PSA Crypto config file to use with MCUboot"
+    string "TF-PSA-Crypto config file to use with MCUboot"
     default "$(TFM_SOURCE_DIR)/bl2/ext/mcuboot/config/mcuboot_crypto_config.h"
 
 choice BL2_LOG_LEVEL

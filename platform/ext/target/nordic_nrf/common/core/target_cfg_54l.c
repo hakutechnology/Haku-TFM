@@ -22,7 +22,7 @@
 #include "tfm_plat_provisioning.h"
 #include "utilities.h"
 #include "region.h"
-#include "array.h"
+#include "tfm_utils.h"
 
 #ifdef __NRF_TFM__
 #include <zephyr/autoconf.h>
@@ -53,9 +53,19 @@
 #define GET_SPU_INSTANCE(periph)                                                                   \
 	((NRF_SPU_Type *)(SPU_ADDRESS_REGION | (periph.periph_start & 0x00FC0000)))
 
+#if defined(NRF54LV10A_XXAA) || defined(NRF54LC10A_XXAA)
+/* On nRF54LV10A and nRF54LC10A XL1 and XL2 are(P1.13) and XL2(P1.14) */
+#define PIN_XL1 45
+#define PIN_XL2 46
+#elif defined(NRF54LM20A_XXAA) || defined(NRF54LM20B_XXAA)
+/* On nRF54LM20A XL1 and XL2 are(P1.13) and XL2(P1.14) */
+#define PIN_XL1 45
+#define PIN_XL2 46
+#else
 /* On nRF54L15 XL1 and XL2 are(P1.00) and XL2(P1.01) */
 #define PIN_XL1 32
 #define PIN_XL2 33
+#endif /* SOC_NRF54LV10A || SOC_NRF54LM20A || SOC_NRF54LM20B */
 
 /* During TF-M system initialization we invoke a function that comes
  * from Zephyr. This function does not have a header file so we
@@ -119,7 +129,7 @@ static void init_mpc_region_override(struct mpc_region_override *override)
 	override->permmask = MPC_OVERRIDE_PERM_SECATTR_Msk;
 }
 
-static nrfx_err_t rramc_configuration(void)
+static int rramc_configuration(void)
 {
 	nrfx_rramc_config_t config = NRFX_RRAMC_DEFAULT_CONFIG(WRITE_BUFFER_SIZE);
 
@@ -138,12 +148,12 @@ static nrfx_err_t rramc_configuration(void)
 	 */
 	nrfx_rramc_evt_handler_t handler = NULL;
 
-	nrfx_err_t err = nrfx_rramc_init(&config, handler);
-	if (err != NRFX_SUCCESS && err != NRFX_ERROR_ALREADY) {
+	int err = nrfx_rramc_init(&config, handler);
+	if (err != 0 && err != -EALREADY) {
 		return err;
 	}
 
-	return NRFX_SUCCESS;
+	return 0;
 }
 
 enum tfm_plat_err_t init_debug(void)
@@ -278,16 +288,19 @@ void peripheral_configuration(void)
 {
 #if SECURE_UART1
 	/* Configure TF-M's UART peripheral to be secure */
+	uint32_t uart_periph_start;
 #if NRF_SECURE_UART_INSTANCE == 00
-	uint32_t uart_periph_start = tfm_peripheral_uarte00.periph_start;
+	uart_periph_start = tfm_peripheral_uarte00.periph_start;
 #elif NRF_SECURE_UART_INSTANCE == 20
-	uint32_t uart_periph_start = tfm_peripheral_uarte20.periph_start;
+	uart_periph_start = tfm_peripheral_uarte20.periph_start;
 #elif NRF_SECURE_UART_INSTANCE == 21
-	uint32_t uart_periph_start = tfm_peripheral_uarte21.periph_start;
+	uart_periph_start = tfm_peripheral_uarte21.periph_start;
 #elif NRF_SECURE_UART_INSTANCE == 22
-	uint32_t uart_periph_start = tfm_peripheral_uarte22.periph_start;
+	uart_periph_start = tfm_peripheral_uarte22.periph_start;
 #elif NRF_SECURE_UART_INSTANCE == 30
-	uint32_t uart_periph_start = tfm_peripheral_uarte30.periph_start;
+	uart_periph_start = tfm_peripheral_uarte30.periph_start;
+#else
+#error "Unsupported NRF_SECURE_UART_INSTANCE for nrf54l series. Supported instances: 00, 20, 21, 22, 30"
 #endif
 	spu_peripheral_config_secure(uart_periph_start, SPU_LOCK_CONF_LOCKED);
 #endif /* SECURE_UART1 */
@@ -411,6 +424,7 @@ static void gpio_configuration(void)
 		}
 	}
 
+
 	/* Configure properly the XL1 and XL2 pins so that the low-frequency crystal
 	 * oscillator (LFXO) can be used.
 	 * This configuration can be done only from secure code, as otherwise those
@@ -458,8 +472,8 @@ enum tfm_plat_err_t spu_periph_init_cfg(void)
 
 	nrf_cache_enable(NRF_ICACHE);
 
-	nrfx_err_t nrfx_err = rramc_configuration();
-	if (nrfx_err != NRFX_SUCCESS) {
+	int nrfx_err = rramc_configuration();
+	if (nrfx_err != 0) {
 		return TFM_PLAT_ERR_SYSTEM_ERR;
 	}
 
@@ -480,7 +494,6 @@ enum tfm_plat_err_t nvic_interrupt_target_state_cfg(void)
 	for (uint8_t i = 0; i < sizeof(NVIC->ITNS) / sizeof(NVIC->ITNS[0]); i++) {
 		NVIC->ITNS[i] = 0xFFFFFFFF;
 	}
-
 	/* Make sure that the SPU instance(s) are targeted to S state */
 	for (int i = 0; i < ARRAY_SIZE(spu_instances); i++) {
 		NVIC_ClearTargetState(NRFX_IRQ_NUMBER_GET(spu_instances[i]));
@@ -494,7 +507,6 @@ enum tfm_plat_err_t nvic_interrupt_target_state_cfg(void)
 	NVIC_ClearTargetState(
 		NRFX_IRQ_NUMBER_GET(NRF_UARTE_INSTANCE_GET(NRF_SECURE_UART_INSTANCE)));
 #endif
-
 	return TFM_PLAT_ERR_SUCCESS;
 }
 

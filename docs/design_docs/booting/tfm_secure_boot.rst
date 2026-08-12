@@ -247,8 +247,6 @@ modes are supported by which platforms:
 +---------------------+-----------------+---------------+----------+----------------+--------------+
 | Musca-B1            | Yes             | Yes           | Yes      | Yes            | No           |
 +---------------------+-----------------+---------------+----------+----------------+--------------+
-| Musca-S1            | Yes             | Yes           | Yes      | Yes            | No           |
-+---------------------+-----------------+---------------+----------+----------------+--------------+
 | AN524               | Yes             | No            | No       | Yes            | No           |
 +---------------------+-----------------+---------------+----------+----------------+--------------+
 | AN547               | No              | Yes           | Yes      | Yes            | No           |
@@ -265,9 +263,9 @@ modes are supported by which platforms:
 +---------------------+-----------------+---------------+----------+----------------+--------------+
 | nRF5340 DK          | Yes             | Yes           | No       | No             | No           |
 +---------------------+-----------------+---------------+----------+----------------+--------------+
-| BL5340 DVK          | Yes             | Yes           | Yes      | No             | No           |
-+---------------------+-----------------+---------------+----------+----------------+--------------+
 | RSE                 | No              | No            | No       | No             | Yes          |
++---------------------+-----------------+---------------+----------+----------------+--------------+
+| LP_MSPM33C321A      | Yes             | No            | No       | No             | No           |
 +---------------------+-----------------+---------------+----------+----------------+--------------+
 
 .. [1] To disable BL2, please set the ``BL2`` cmake option to ``OFF``
@@ -326,7 +324,7 @@ Example of how to provide the secure image minimum version::
 ********************
 Signature algorithms
 ********************
-MbedTLS library is used to sign the images. The list of supported signing
+TF-PSA-Crypto library is used to sign the images. The list of supported signing
 algorithms:
 
   - `RSA-2048`
@@ -725,8 +723,8 @@ Executing firmware upgrade on SSE 200 FPGA on MPS2 board
     IMAGE2ADDRESS: 0x10180000
     IMAGE2FILE: \Software\tfm_sig1.bin ; TF-M regression test binary blob
 
-Executing firmware upgrade on Musca-B1 and Musca-S1 boards
-----------------------------------------------------------
+Executing firmware upgrade on Musca-B1 boards
+---------------------------------------------
 After the two images have been built, they can be concatenated to create the
 combined image using ``srec_cat``:
 
@@ -832,6 +830,8 @@ bootutil_misc.c to control the image status.
     So the Firmware Update partition cannot decide where to write the new
     image. As a result, the firmware update service is not supported in
     direct-xip mode and ram-load mode.
+
+--------------------------------
 
 *SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors*
 

@@ -8,13 +8,16 @@
  *
  */
 
+#include <stdbool.h>
 #include <stdint.h>
 #include "async.h"
 #include "bitops.h"
 #include "config_impl.h"
 #include "config_spm.h"
 #include "critical_section.h"
+#include "current.h"
 #include "internal_status_code.h"
+#include "interrupt.h"
 #include "psa/lifecycle.h"
 #include "psa/service.h"
 #include "spm.h"
@@ -95,6 +98,11 @@ psa_signal_t tfm_spm_partition_psa_wait(psa_signal_t signal_mask,
         tfm_core_panic();
     }
 
+#if (CONFIG_TFM_SPM_BACKEND_IPC == 1) && (CONFIG_TFM_SCHEDULE_WHEN_NS_INTERRUPTED == 0) && \
+    ((CONFIG_TFM_FLIH_API == 1) || (CONFIG_TFM_SLIH_API == 1))
+        /* Unconditionally get the cookie, consume it later if required */
+        bool isr_cookie = tfm_get_isr_cookie();
+#endif
     /*
      * After new signal(s) are available, the return value will be updated in
      * PendSV and blocked thread gets to run.
@@ -106,6 +114,14 @@ psa_signal_t tfm_spm_partition_psa_wait(psa_signal_t signal_mask,
         }
     } else {
         signal = partition->signals_asserted & signal_mask;
+
+#if (CONFIG_TFM_SPM_BACKEND_IPC == 1) && (CONFIG_TFM_SCHEDULE_WHEN_NS_INTERRUPTED == 0) && \
+    ((CONFIG_TFM_FLIH_API == 1) || (CONFIG_TFM_SLIH_API == 1))
+        /* PSA_POLL and no signals, check if there are cookies left from ISR */
+        if ((signal == 0) && isr_cookie) {
+            signal = (psa_signal_t)STATUS_NEED_SCHEDULE;
+        }
+#endif
     }
 
     return signal;
@@ -118,7 +134,7 @@ psa_status_t tfm_spm_partition_psa_get(psa_signal_t signal, psa_msg_t *msg)
     psa_status_t ret = PSA_ERROR_GENERIC_ERROR;
     struct connection_t *handle = NULL;
     struct partition_t *partition = NULL;
-    fih_int fih_rc = FIH_FAILURE;
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
 
     /*
      * Only one message could be retrieved every time for psa_get(). It is a
@@ -137,7 +153,7 @@ psa_status_t tfm_spm_partition_psa_get(psa_signal_t signal, psa_msg_t *msg)
     FIH_CALL(tfm_hal_memory_check, fih_rc,
              partition->boundary, (uintptr_t)msg,
              sizeof(psa_msg_t), TFM_HAL_ACCESS_READWRITE);
-    if (fih_not_eq(fih_rc, fih_int_encode(PSA_SUCCESS))) {
+    if (FIH_NOT_EQ(fih_rc, PSA_SUCCESS)) {
         tfm_core_panic();
     }
 
@@ -379,26 +395,32 @@ psa_status_t tfm_spm_partition_psa_clear(void)
 }
 #endif /* CONFIG_TFM_DOORBELL_API == 1 */
 
-psa_status_t tfm_spm_partition_psa_panic(void)
+void tfm_spm_partition_psa_panic(void)
 {
+/* Suppress Pe111 (statement is unreachable) and Pe128 (loop is unreachable) for
+ * IAR as redundant code is needed for FIH
+ */
+#if defined(__ICCARM__)
+#pragma diag_suppress = Pe111
+#pragma diag_suppress = Pe128
+#endif
 #ifdef CONFIG_TFM_HALT_ON_CORE_PANIC
     tfm_hal_system_halt();
 #else
     /*
-     * PSA FF recommends that the SPM causes the system to restart when a secure
-     * partition panics.
+     * PSA FF recommends that the SPM causes the system
+     * to restart when a secure partition panics
      */
-    tfm_hal_system_reset();
+    tfm_hal_system_reset(TFM_PLAT_SWSYN_DEFAULT);
 #endif
 
-    /* Suppress Pe111 (statement is unreachable) for IAR as return here is in
-     * case system reset fails, which should not happen */
 #if defined(__ICCARM__)
-#pragma diag_suppress = Pe111
-#endif
-    /* Execution should not reach here */
-    return PSA_ERROR_GENERIC_ERROR;
-#if defined(__ICCARM__)
+    while (1) {
+        __NOP();
+    }
 #pragma diag_default = Pe111
+#pragma diag_default = Pe128
+#else
+    __builtin_unreachable();
 #endif
 }

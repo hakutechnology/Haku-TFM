@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Copyright (c) 2022-2025, Arm Limited. All rights reserved.
+# SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -14,7 +14,7 @@ target_add_scatter_file(tfm_s
     $<$<C_COMPILER_ID:ARMClang>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/armclang/tfm_isolation_s.sct>
     $<$<C_COMPILER_ID:GNU>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/gcc/tfm_isolation_s.ld>
     $<$<C_COMPILER_ID:IAR>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/iar/tfm_isolation_s.icf>
-    $<$<C_COMPILER_ID:Clang>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/llvm/tfm_isolation_s.ld>
+    $<$<C_COMPILER_ID:Clang>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/atfe/tfm_isolation_s.ld>
 )
 
 # Specify the location of platform specific build dependencies.
@@ -27,13 +27,23 @@ if(BL2)
     target_sources(bl2
         PRIVATE
             ${CMAKE_CURRENT_LIST_DIR}/device/source/startup_mps4_corstone3xx.c
+            ${TF_PSA_CRYPTO_PATH}/utilities/constant_time.c
+            ${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/cipher.c
+            ${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/cipher_wrap.c
+            ${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/psa_crypto_cipher.c
+    )
+
+    target_include_directories(bl2
+        PRIVATE
+            ${TF_PSA_CRYPTO_PATH}/utilities
+            ${TF_PSA_CRYPTO_PATH}/drivers/builtin/include
     )
 
     target_add_scatter_file(bl2
         $<$<C_COMPILER_ID:ARMClang>:${PLATFORM_DIR}/ext/common/armclang/tfm_common_bl2.sct>
         $<$<C_COMPILER_ID:GNU>:${PLATFORM_DIR}/ext/common/gcc/tfm_common_bl2.ld>
         $<$<C_COMPILER_ID:IAR>:${PLATFORM_DIR}/ext/common/iar/tfm_common_bl2.icf>
-	$<$<C_COMPILER_ID:Clang>:${PLATFORM_DIR}/ext/common/llvm/tfm_common_bl2.ld>
+	$<$<C_COMPILER_ID:Clang>:${PLATFORM_DIR}/ext/common/atfe/tfm_common_bl2.ld>
     )
 
     target_compile_options(bl2_scatter
@@ -154,7 +164,7 @@ target_link_libraries(platform_s
     PUBLIC
         device_definition
     PRIVATE
-        tfm_sprt # For tfm_strnlen in attest HAL
+        tfm_sprt # For strnlen() in attest HAL
 )
 
 #========================= Platform BL2 =======================================#
@@ -284,18 +294,12 @@ target_add_scatter_file(bl1_1
     $<$<C_COMPILER_ID:ARMClang>:${CMAKE_CURRENT_LIST_DIR}/device/source/armclang/mps4_corstone3xx_bl1_1.sct>
     $<$<C_COMPILER_ID:GNU>:${CMAKE_CURRENT_LIST_DIR}/device/source/gcc/mps4_corstone3xx_bl1_1.ld>
     $<$<C_COMPILER_ID:IAR>:${CMAKE_CURRENT_LIST_DIR}/device/source/iar/mps4_corstone3xx_bl1_1.icf>
-    $<$<C_COMPILER_ID:Clang>:${CMAKE_CURRENT_LIST_DIR}/device/source/llvm/mps4_corstone3xx_bl1_1.ld>
+    $<$<C_COMPILER_ID:Clang>:${CMAKE_CURRENT_LIST_DIR}/device/source/atfe/mps4_corstone3xx_bl1_1.ld>
 )
 
 target_compile_options(bl1_1_scatter
     PUBLIC
         ${COMPILER_CMSE_FLAG}
-)
-
-target_compile_definitions(bl1_1
-    PRIVATE
-        MBEDTLS_CONFIG_FILE="${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/tfm_mbedcrypto_config_default.h"
-        MBEDTLS_PSA_CRYPTO_CONFIG_FILE="${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/crypto_config_default.h"
 )
 
 target_compile_options(bl1_1
@@ -305,7 +309,7 @@ target_compile_options(bl1_1
 
 target_sources(platform_bl1_1
     PRIVATE
-        ${MBEDCRYPTO_PATH}/library/hmac_drbg.c
+        ${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/hmac_drbg.c
         ${CMAKE_CURRENT_LIST_DIR}/nv_counters.c
         ${CMAKE_CURRENT_LIST_DIR}/otp_lcm.c
         ${CMAKE_CURRENT_LIST_DIR}/cmsis_drivers/Driver_USART.c
@@ -320,11 +324,6 @@ target_sources(platform_bl1_1
 target_compile_options(platform_bl1_1
     PUBLIC
         ${COMPILER_CMSE_FLAG}
-)
-
-target_compile_definitions(platform_bl1_1
-    PUBLIC
-        MBEDTLS_HMAC_DRBG_C
 )
 
 # If this is not added to the bl1_1 it will not correctly override the weak
@@ -343,28 +342,50 @@ target_link_libraries(platform_bl1_1
         bl1_1_shared_lib_interface
 )
 
-target_sources(bl1_1_shared_lib
+target_compile_definitions(bl1_1_psa_crypto_interface
+    INTERFACE
+        # This platform-specific configuration file extends the base configuration file
+        TF_PSA_CRYPTO_USER_CONFIG_FILE="${CMAKE_CURRENT_LIST_DIR}/bl1/tf_psa_crypto_extra_config.h"
+)
+
+target_sources(bl1_1_psa_crypto
     PRIVATE
         $<$<NOT:$<BOOL:${TFM_BL1_SOFTWARE_CRYPTO}>>:${CMAKE_CURRENT_LIST_DIR}/bl1/cc312_rom_crypto.c>
+
+        # TF-PSA-Crypto cryptography
+        $<$<BOOL:${TFM_BL1_SOFTWARE_CRYPTO}>:${CMAKE_CURRENT_LIST_DIR}/bl1/crypto_mbedcrypto.c>
+        $<$<BOOL:${TFM_BL1_SOFTWARE_CRYPTO}>:${TF_PSA_CRYPTO_PATH}/platform/platform.c>
+        $<$<BOOL:${TFM_BL1_SOFTWARE_CRYPTO}>:${TF_PSA_CRYPTO_PATH}/platform/memory_buffer_alloc.c>
+        $<$<BOOL:${TFM_BL1_SOFTWARE_CRYPTO}>:${TF_PSA_CRYPTO_PATH}/extras/md.c>
+        $<$<BOOL:${TFM_BL1_SOFTWARE_CRYPTO}>:${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/md5.c>
+        $<$<BOOL:${TFM_BL1_SOFTWARE_CRYPTO}>:${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/aes.c>
+        $<$<BOOL:${TFM_BL1_SOFTWARE_CRYPTO}>:${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/cmac.c>
+        $<$<BOOL:${TFM_BL1_SOFTWARE_CRYPTO}>:${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/sha256.c>
+        $<$<BOOL:${TFM_BL1_SOFTWARE_CRYPTO}>:${TF_PSA_CRYPTO_PATH}/utilities/constant_time.c>
+        $<$<BOOL:${TFM_BL1_SOFTWARE_CRYPTO}>:${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/psa_crypto_mac.c>
+        $<$<BOOL:${TFM_BL1_SOFTWARE_CRYPTO}>:${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/cipher.c>
+        $<$<BOOL:${TFM_BL1_SOFTWARE_CRYPTO}>:${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/cipher_wrap.c>
+        $<$<BOOL:${TFM_BL1_SOFTWARE_CRYPTO}>:${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/psa_crypto_cipher.c>
 )
+
+target_include_directories(bl1_1_psa_crypto
+    PRIVATE
+        ${TF_PSA_CRYPTO_PATH}/utilities
+        ${TF_PSA_CRYPTO_PATH}/drivers/builtin/include
+)
+
 #========================= Platform BL1_2 =====================================#
 
 target_add_scatter_file(bl1_2
     $<$<C_COMPILER_ID:ARMClang>:${CMAKE_CURRENT_LIST_DIR}/device/source/armclang/mps4_corstone3xx_bl1_2.sct>
     $<$<C_COMPILER_ID:GNU>:${CMAKE_CURRENT_LIST_DIR}/device/source/gcc/mps4_corstone3xx_bl1_2.ld>
     $<$<C_COMPILER_ID:IAR>:${CMAKE_CURRENT_LIST_DIR}/device/source/iar/mps4_corstone3xx_bl1_2.icf>
-    $<$<C_COMPILER_ID:Clang>:${CMAKE_CURRENT_LIST_DIR}/device/source/llvm/mps4_corstone3xx_bl1_2.ld>
+    $<$<C_COMPILER_ID:Clang>:${CMAKE_CURRENT_LIST_DIR}/device/source/atfe/mps4_corstone3xx_bl1_2.ld>
 )
 
 target_compile_options(bl1_2_scatter
     PUBLIC
         ${COMPILER_CMSE_FLAG}
-)
-
-target_compile_definitions(bl1_2
-    PRIVATE
-        MBEDTLS_CONFIG_FILE="${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/tfm_mbedcrypto_config_default.h"
-        MBEDTLS_PSA_CRYPTO_CONFIG_FILE="${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/crypto_config_default.h"
 )
 
 target_compile_options(bl1_2
@@ -474,6 +495,15 @@ if(DEFAULT_NS_SCATTER)
     install(FILES       ${PLATFORM_DIR}/ext/common/armclang/tfm_common_ns.sct
                         ${PLATFORM_DIR}/ext/common/gcc/tfm_common_ns.ld
                         ${PLATFORM_DIR}/ext/common/iar/tfm_common_ns.icf
-                        ${PLATFORM_DIR}/ext/common/llvm/tfm_common_ns.ldc
+                        ${PLATFORM_DIR}/ext/common/atfe/tfm_common_ns.ldc
             DESTINATION ${INSTALL_PLATFORM_NS_DIR}/linker_scripts)
 endif()
+
+create_tfm_s_hex_merge_list(
+    BL2_TARGET          bl2_signed_hex
+    TFM_S_TARGET        tfm_s_hex
+    TFM_S_SIGNED_TARGET tfm_s_signed_hex
+    INPUT_TARGETS       bl1_1_hex
+                        dm_provisioning_bundle_hex
+                        cm_provisioning_bundle_hex
+)

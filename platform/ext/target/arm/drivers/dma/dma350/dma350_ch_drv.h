@@ -2436,6 +2436,12 @@ void dma350_ch_set_yaddrstride(struct dma350_ch_dev_t *dev,
 }
 
 __STATIC_INLINE
+void dma350_ch_enable_source_trigger(struct dma350_ch_dev_t *dev)
+{
+    dev->cfg.ch_base->CH_CTRL |= DMA_CH_CTRL_USESRCTRIGIN_Msk;
+}
+
+__STATIC_INLINE
 void dma350_ch_set_transize(struct dma350_ch_dev_t *dev,
                             enum dma350_ch_transize_t transize)
 {
@@ -2578,9 +2584,9 @@ void dma350_ch_set_srcmemattr(struct dma350_ch_dev_t *dev, uint8_t memattr,
     dev->cfg.ch_base->CH_SRCTRANSCFG =
         /* Only set Lo, Hi, and Share attributes */
         (dev->cfg.ch_base->CH_SRCTRANSCFG &
-         ((~DMA_CH_SRCTRANSCFG_SRCMEMATTRLO_Msk) |
-          (~DMA_CH_SRCTRANSCFG_SRCMEMATTRHI_Msk) |
-          (~DMA_CH_SRCTRANSCFG_SRCSHAREATTR_Msk))
+         ~(DMA_CH_SRCTRANSCFG_SRCMEMATTRLO_Msk |
+           DMA_CH_SRCTRANSCFG_SRCMEMATTRHI_Msk |
+           DMA_CH_SRCTRANSCFG_SRCSHAREATTR_Msk)
          /* memattr already has Lo and Hi values in correct order */
          ) |
         ((memattr & 0x000000FFUL) << DMA_CH_SRCTRANSCFG_SRCMEMATTRLO_Pos)
@@ -2619,9 +2625,9 @@ void dma350_ch_set_desmemattr(struct dma350_ch_dev_t *dev, uint8_t memattr,
     dev->cfg.ch_base->CH_DESTRANSCFG =
         /* Only set Lo, Hi, and Share attributes */
         (dev->cfg.ch_base->CH_DESTRANSCFG &
-         ((~DMA_CH_DESTRANSCFG_DESMEMATTRLO_Msk) |
-          (~DMA_CH_DESTRANSCFG_DESMEMATTRHI_Msk) |
-          (~DMA_CH_DESTRANSCFG_DESSHAREATTR_Msk))
+         ~(DMA_CH_DESTRANSCFG_DESMEMATTRLO_Msk |
+           DMA_CH_DESTRANSCFG_DESMEMATTRHI_Msk |
+           DMA_CH_DESTRANSCFG_DESSHAREATTR_Msk)
          /* memattr already has Lo and Hi values in correct order */
          ) |
         ((memattr & 0x000000FFUL) << DMA_CH_DESTRANSCFG_DESMEMATTRLO_Pos)
@@ -3621,6 +3627,20 @@ __STATIC_INLINE
 enum dma350_ch_cmd_t dma350_ch_get_cmd(struct dma350_ch_dev_t *dev)
 {
     return (enum dma350_ch_cmd_t)dev->cfg.ch_base->CH_CMD;
+}
+
+__STATIC_INLINE
+void dma350_ch_cmd_and_wait_until_done(struct dma350_ch_dev_t *dev,
+                                       enum dma350_ch_cmd_t cmd)
+{
+    dma350_ch_cmd(dev, cmd);
+    while (!!(dma350_ch_get_cmd(dev) & cmd));
+}
+
+__STATIC_INLINE
+void dma350_ch_clear(struct dma350_ch_dev_t *dev)
+{
+    dma350_ch_cmd_and_wait_until_done(dev, DMA350_CH_CMD_CLEARCMD);
 }
 
 __STATIC_INLINE

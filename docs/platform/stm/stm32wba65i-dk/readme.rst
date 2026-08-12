@@ -1,3 +1,47 @@
+--------
+STM32WBA
+--------
+
+TF-M is supported on STM32WBA series
+
+https://www.st.com/en/microcontrollers-microprocessors/stm32wba-series.html
+
+Directory content
+^^^^^^^^^^^^^^^^^
+
+- stm/common/stm32wbaxx/stm32wbaxx_hal:
+   Content from https://github.com/STMicroelectronics/stm32wbaxx_hal_driver (HAL version - Tags V1.9.0 )
+
+- stm/common/stm32wbaxx/Device:
+   Content from https://github.com/STMicroelectronics/cmsis_device_wba
+
+- stm/common/stm32wbaxx/secure:
+   stm32wbaxx Secure porting adaptation from https://github.com/STMicroelectronics/STM32CubeWBA.git
+
+- stm/common/stm32wbaxx/boards:
+   Adaptation and tools specific to stm32 board using stm32wbaxx device from https://github.com/STMicroelectronics/STM32CubeWBA.git
+
+- stm/common/stm32wbaxx/CMSIS_Driver:
+   Flash and uart driver for stm32wbaxx platform
+
+- stm/common/stm32wbaxx/Native_Driver:
+   Random generator and tickless implementation
+
+Specific Software Requirements
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+STM32CubeProgrammer is required.(see https://www.st.com/en/development-tools/stm32cubeprog.html)
+
+
+Limitations to Consider When Using the Platform
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+TF-M Supported without BL1/BL2.
+
+By default, TFM_OTP_DEFAULT_PROVISIONING and DEFAULT_SHARED_DATA switches are enabled in TF-M,
+to use dummy data in OTP and SRAM shared_data areas as BL2 not supported.
+
+
 STM32WBA65_DK
 ^^^^^^^^^^^^^^^
 
@@ -27,7 +71,7 @@ in Isolation Level 1.
 
     mkdir build_s && cd build_s
 
-    cmake -S /../tf-m-tests/tests_reg/spe -B . -GNinja -DTFM_PLATFORM=stm/stm32wba65i-dk
+    cmake -S /../tf-m-tests/tests_reg/spe -B . -GNinja -DTFM_PLATFORM=stm/stm32wba65i_dk
          -DTFM_TOOLCHAIN_FILE= /../toolchain_ARMCLANG.cmake
          -DCONFIG_TFM_SOURCE_PATH= /../trusted-firmware-m
          -DTFM_PSA_API=ON -DTFM_ISOLATION_LEVEL=1
@@ -56,7 +100,7 @@ the attestation service in Isolation Level 1 on Linux.
 
     mkdir build_s && cd build_s
 
-    cmake -S /../tf-m-tests/tests_psa_arch/spe -B . -GNinja -DTFM_PLATFORM=stm/stm32wba65i-dk
+    cmake -S /../tf-m-tests/tests_psa_arch/spe -B . -GNinja -DTFM_PLATFORM=stm/stm32wba65i_dk
          -DTFM_TOOLCHAIN_FILE= /../toolchain_ARMCLANG.cmake
          -DCONFIG_TFM_SOURCE_PATH= /../trusted-firmware-m
          -DTFM_PSA_API=ON -DTFM_ISOLATION_LEVEL=1
@@ -95,6 +139,5 @@ In case of target power-off, the TFM_UPDATE.sh script must be run to program bl2
 
 -------------
 
-*Copyright (c) 2021, Arm Limited. All rights reserved.*
-*Copyright (c) 2019, STMicroelectronics. All rights reserved.*
+*Copyright (c) 2026, STMicroelectronics. All rights reserved.*
 *SPDX-License-Identifier: BSD-3-Clause*

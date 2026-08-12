@@ -8,8 +8,9 @@ Previously known as Runtime Security Subsystem (RSS).
     :maxdepth: 1
 
     RSE introduction <readme.rst>
+    DMA Initial Command Sequence (ICS) introduction <dma_ics_readme.rst>
     RSE integration guide <rse_integration_guide.rst>
-    RSE communication design <rse_comms.rst>
+    SFCP communication design <sfcp.rst>
     RSE hardware key management <rse_key_management.rst>
     RSE provisioning <rse_provisioning.rst>
     RSE routing table <rse_routing_table.rst>
@@ -17,7 +18,10 @@ Previously known as Runtime Security Subsystem (RSS).
     RSE Platforms <platforms/index.rst>
     RSE ROM unit test guidelines <rse_unit_tests_guidelines.rst>
     RSE staged boot <rse_staged_boot.rst>
+    RSE BL1_2 image binding <rse_bl1_2_image_binding.rst>
     RSE firmware update metadata <rse_fwu_metadata.rst>
+    RSE BL2 image binding <rse_bl2_image_binding.rst>
+    RSE Cryptography <rse_crypto.rst>
 
 RSE also includes the following extra partitions:
 
@@ -28,4 +32,4 @@ RSE also includes the following extra partitions:
 
 --------------
 
-*Copyright (c) 2022-2024, Arm Limited. All rights reserved.*
+*SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors*

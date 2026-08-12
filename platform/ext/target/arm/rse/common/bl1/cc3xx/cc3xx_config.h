@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, The TrustedFirmware-M Contributors. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -60,11 +60,31 @@
 /* Whether CHACHA_POLY1305 is enabled */
 /* #define CC3XX_CONFIG_CHACHA_POLY1305_ENABLE */
 
+/* Whether platform DMA prologue/epilogue hooks are enabled */
+#define CC3XX_CONFIG_DMA_HOOKS_ENABLE
+
 /* Whether DMA remapping is enabled */
 #define CC3XX_CONFIG_DMA_REMAP_ENABLE
 
+/* Only has an effect if CC3XX_CONFIG_DMA_REMAP_ENABLE is defined.
+ * Defines DMA remapping regions.
+ * See cc3xx_lowlevel_init for further details.
+ */
+#define CC3XX_DMA_REMAP_REGIONS \
+    {ITCM_BASE_S, ITCM_SIZE, ITCM_CPU0_BASE_S, 0x01000000}, \
+    {ITCM_BASE_NS, ITCM_SIZE, ITCM_CPU0_BASE_NS, 0x01000000}, \
+    {DTCM_BASE_S, DTCM_SIZE, DTCM_CPU0_BASE_S, 0x01000000}, \
+    {DTCM_BASE_NS, DTCM_SIZE, DTCM_CPU0_BASE_NS, 0x01000000}
+
 /* Whether DMA Check for Burst Restricted addresses is enabled */
 #define CC3XX_CONFIG_DMA_BURST_RESTRICTED_ENABLE
+
+/* Only has an effect if CC3XX_CONFIG_DMA_BURST_RESTRICED_ENABLE is defined.
+ * Defines DMA burst restricted regions.
+ * See cc3xx_low_level_init for further details.
+ */
+#define CC3XX_DMA_BURST_RESTRICTED_REGIONS \
+    {KMU_BASE_S + 0x130, 0x400} /* KMU Key Slot Registers */
 
 /* Whether DMA supports working on cached memories */
 #define CC3XX_CONFIG_DMA_CACHE_FLUSH_ENABLE
@@ -94,9 +114,9 @@
 /* #define CC3XX_CONFIG_TRNG_DMA */
 
 /* Whether RNG uses HMAC_DRBG when RNG_DRBG is selected */
-#define CC3XX_CONFIG_RNG_DRBG_HMAC
+/* #define CC3XX_CONFIG_RNG_DRBG_HMAC */
 /* Whether RNG uses CTR_DRBG when RNG_DRBG is selected */
-/* #define CC3XX_CONFIG_RNG_DRBG_CTR */
+#define CC3XX_CONFIG_RNG_DRBG_CTR
 /* Whether RNG uses HASH_DRBG when RNG_DRBG is selected */
 /* #define CC3XX_CONFIG_RNG_DRBG_HASH */
 
@@ -147,6 +167,19 @@
 #ifndef CC3XX_CONFIG_RNG_RING_OSCILLATOR_ID
 #define CC3XX_CONFIG_RNG_RING_OSCILLATOR_ID 0
 #endif /* !CC_RNG_RING_OSCILLATOR_ID */
+
+/* Build time configuration for the SP800-90B continuous health tests */
+#ifndef CC3XX_CONFIG_ENTROPY_HIGH_THRESHOLD
+#define CC3XX_CONFIG_ENTROPY_HIGH_THRESHOLD (821UL)
+#endif /* CC3XX_CONFIG_ENTROPY_HIGH_THRESHOLD */
+
+#ifndef CC3XX_CONFIG_ENTROPY_REPETITION_COUNT
+#define CC3XX_CONFIG_ENTROPY_REPETITION_COUNT (81UL)
+#endif /* CC3XX_CONFIG_ENTROPY_REPETITION_COUNT */
+
+#ifndef CC3XX_CONFIG_ENTROPY_WINDOW_SIZE
+#define CC3XX_CONFIG_ENTROPY_WINDOW_SIZE (1024UL)
+#endif /* CC3XX_CONFIG_ENTROPY_WINDOW_SIZE */
 
 /* Whether PKA SRAM encryption is supported */
 #define CC3XX_CONFIG_PKA_SRAM_ENCRYPTION_SUPPORTED
@@ -208,7 +241,7 @@
 /* Whether the Shamir trick will be used to improve performance of point-scalar
  * multiplication on non-secret data. Has a code-size penalty.
  */
-/* #define CC3XX_CONFIG_EC_SHAMIR_TRICK_ENABLE */
+#define CC3XX_CONFIG_EC_SHAMIR_TRICK_ENABLE
 
 /* Whether various ECDSA features are enabled */
 #define CC3XX_CONFIG_ECDSA_SIGN_ENABLE
@@ -238,5 +271,8 @@
 
 /* Whether the present hardware is a CC310 */
 /* #define CC3XX_CONFIG_HW_VERSION_CC310 */
+
+/* Whether Opaque keys are enabled or not */
+#define CC3XX_CRYPTO_OPAQUE_KEYS
 
 #endif /* CC3XX_CONFIG_H */

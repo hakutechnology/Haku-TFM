@@ -19,39 +19,44 @@
 #include "lcm_drv.h"
 #include "device_definition.h"
 
-/* 2KiB buffer to store provisioned blob, will be passed to
+/* 3KiB buffer to store provisioned blob, will be passed to
  * BL1_1 via persistent data */
-static uint32_t blob_buffer[0x800 / sizeof(uint32_t)];
+static uint32_t *blob_buffer = (uint32_t *)RUNTIME_PROVISIONING_MESSAGE_START;
+static size_t blob_buffer_size = RUNTIME_PROVISIONING_MESSAGE_MAX_SIZE;
 
 enum runtime_provisioning_error_t runtime_provisioning_hal_init(void)
 {
     enum tfm_plat_err_t err;
     enum lcm_error_t lcm_err;
     enum lcm_lcs_t lcs;
-    bool valid_state = false;
 
     lcm_err = lcm_get_lcs(&LCM_DEV_S, &lcs);
     if (lcm_err != LCM_ERROR_NONE) {
         return RUNTIME_PROVISIONING_GENERIC_ERROR;
     }
 
-#ifdef RSE_NON_ENDORSED_DM_PROVISIONING
-    valid_state = valid_state || (lcs == LCM_LCS_SE);
+    switch (lcs) {
+#if defined(RSE_NON_ENDORSED_DM_PROVISIONING) || \
+    defined(RSE_ENDORSEMENT_CERTIFICATE_PROVISIONING) || \
+    defined(RSE_ROTPK_REVOCATION) || \
+    defined(RSE_SKU_ENABLED) || \
+    defined(RSE_HAS_SE_DEV_SOFT_LCS)
+    case LCM_LCS_SE:
+        break;
 #endif
-
 #ifdef RSE_BOOT_IN_DM_LCS
-    valid_state = valid_state || (lcs == LCM_LCS_DM);
+    case LCM_LCS_DM:
+        break;
 #endif
-
-    if (!valid_state) {
+    default:
         return RUNTIME_PROVISIONING_INVALID_STATE;
     }
 
     RSE_PERSISTENT_DATA->bl1_data.provisioning_blob_buf = blob_buffer;
-    RSE_PERSISTENT_DATA->bl1_data.provisioning_blob_buf_size = sizeof(blob_buffer);
+    RSE_PERSISTENT_DATA->bl1_data.provisioning_blob_buf_size = blob_buffer_size;
 
     err = provisioning_comms_init((struct rse_provisioning_message_t *)blob_buffer,
-                                  sizeof(blob_buffer));
+                                  blob_buffer_size);
     if (err != TFM_PLAT_ERR_SUCCESS) {
         return RUNTIME_PROVISIONING_GENERIC_ERROR;
     }
@@ -68,11 +73,18 @@ enum runtime_provisioning_error_t runtime_provisioning_hal_init(void)
 static enum tfm_plat_err_t handle_plain_data_message(struct rse_provisioning_message_t *message)
 {
     enum tfm_plat_err_t err;
+
+    struct default_plain_data_handler_ctx_s ctx = {
+        .rotpk_revocation_ctx = {
+            .authentication = ROTPK_REVOCATION_AUTHENTICATION_NONE,
+        }
+    };
+
     struct provisioning_message_handler_config config = {
         .plain_data_handler = default_plain_data_handler,
     };
 
-    err = handle_provisioning_message(message, sizeof(blob_buffer), &config, NULL);
+    err = handle_provisioning_message(message, blob_buffer_size, &config, &ctx);
     if (err != TFM_PLAT_ERR_SUCCESS) {
         rse_set_provisioning_staging_status(PROVISIONING_STAGING_STATUS_NO_MESSAGE);
         message_handling_status_report_error(PROVISIONING_REPORT_STEP_PARSE_PLAIN_DATA, err);
@@ -82,14 +94,12 @@ static enum tfm_plat_err_t handle_plain_data_message(struct rse_provisioning_mes
 }
 #endif
 
-#ifdef RSE_BOOT_IN_DM_LCS
-static enum tfm_plat_err_t handle_blob_message(void)
+static inline enum tfm_plat_err_t request_reset(void)
 {
-    /* Reset and let BL1_1 provision the blob */
-    tfm_hal_system_reset();
+    tfm_hal_system_reset(TFM_PLAT_SWSYN_DEFAULT);
+    __builtin_unreachable();
     return TFM_PLAT_ERR_SUCCESS;
 }
-#endif
 
 static enum tfm_plat_err_t handle_full_message(void)
 {
@@ -100,10 +110,18 @@ static enum tfm_plat_err_t handle_full_message(void)
     case RSE_PROVISIONING_MESSAGE_TYPE_PLAIN_DATA:
         return handle_plain_data_message(message);
 #endif
-#ifdef RSE_BOOT_IN_DM_LCS
-    case RSE_PROVISIONING_MESSAGE_TYPE_BLOB:
-        return handle_blob_message();
+
+#ifdef RSE_ROTPK_REVOCATION
+    case RSE_PROVISIONING_MESSAGE_TYPE_AUTHENTICATED_PLAIN_DATA:
+        return request_reset();
 #endif
+
+#if defined(RSE_BOOT_IN_DM_LCS) || defined(RSE_ENDORSEMENT_CERTIFICATE_PROVISIONING)
+    case RSE_PROVISIONING_MESSAGE_TYPE_BLOB:
+        /* Reset and let BL1_1 parse the authenticated message */
+        return request_reset();
+#endif
+
     default:
         return TFM_PLAT_ERR_PROVISIONING_MESSAGE_INVALID_TYPE;
     }
@@ -112,14 +130,18 @@ static enum tfm_plat_err_t handle_full_message(void)
 enum runtime_provisioning_error_t runtime_provisioning_hal_process_message(void)
 {
     enum tfm_plat_err_t err;
-    bool received_full_message;
+    enum rx_command_type_handled rx_command_type;
 
-    err = provisioning_comms_receive_command_non_blocking(&received_full_message);
+    err = provisioning_comms_receive_command_non_blocking(&rx_command_type);
     if (err != TFM_PLAT_ERR_SUCCESS) {
         return RUNTIME_PROVISIONING_NO_INTERRUPT;
     }
 
-    if (received_full_message) {
+    if (rx_command_type == RX_COMMAND_TYPE_HANDLED_SINGLE_CMD_REQUIRES_RESET) {
+        request_reset();
+    }
+
+    if (rx_command_type == RX_COMMAND_TYPE_HANDLED_DATA_COMPLETE) {
         rse_set_provisioning_staging_status(PROVISIONING_STAGING_STATUS_RUNTIME_MESSAGE);
         err = handle_full_message();
         if (err != TFM_PLAT_ERR_SUCCESS) {

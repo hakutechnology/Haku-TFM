@@ -1,10 +1,12 @@
-/*
- *  Declaration of context structures for use with the PSA driver wrapper
+/**
+ * \file crypto_driver_contexts_composites.h
+ *
+ * \brief Declaration of context structures for use with the PSA driver wrapper
  *  interface. This file contains the context structures for 'composite'
  *  operations, i.e. those operations which need to make use of other operations
  *  from the primitives (crypto_driver_contexts_primitives.h)
  *
- *  Warning: This file will be auto-generated in the future.
+ * \warning This file will be auto-generated in the future.
  *
  * \note This file may not be included directly. Applications must
  * include psa/crypto.h.
@@ -25,17 +27,24 @@
 #include "psa/crypto_driver_common.h"
 
 /* Include the context structure definitions for the Mbed TLS software drivers */
-#include "psa/crypto_builtin_composites.h"
+#include "mbedtls/private/crypto_builtin_composites.h"
 
 /* Include the context structure definitions for those drivers that were
  * declared during the autogeneration process. */
+#if defined(TF_PSA_CRYPTO_PQCP_MLDSA_ENABLED)
+#include "tf-psa-crypto/private/crypto_struct_pqcp.h"
+#endif
 
 #if defined(PSA_CRYPTO_DRIVER_CC3XX)
 #include "cc3xx_crypto_primitives_private.h"
 #endif
 
 #if defined(MBEDTLS_TEST_LIBTESTDRIVER1)
-#include <libtestdriver1/include/psa/crypto.h>
+#if defined(TF_PSA_CRYPTO_TEST_LIBTESTDRIVER1)
+#include "mbedtls/private/libtestdriver1-crypto_builtin_composites.h"
+#else
+#include <libtestdriver1/tf-psa-crypto/include/psa/crypto.h>
+#endif
 #endif
 
 #if defined(PSA_CRYPTO_DRIVER_TEST)
@@ -137,6 +146,28 @@ typedef union {
     cc3xx_aead_operation_t cc3xx_driver_ctx;
 #endif /* PSA_CRYPTO_DRIVER_CC3XX */
 } psa_driver_aead_context_t;
+
+typedef union {
+    unsigned dummy; /* Make sure this union is always non-empty */
+#if defined(TF_PSA_CRYPTO_PQCP_MLDSA_ENABLED)
+    tf_psa_crypto_mldsa_operation_t pqcp;
+#endif
+#if defined(PSA_CRYPTO_DRIVER_TEST) && 0 /*not implemented yet*/
+    mbedtls_transparent_test_driver_sign_operation_t transparent_test_driver_ctx;
+    mbedtls_opaque_test_driver_sign_operation_t opaque_test_driver_ctx;
+#endif
+} psa_driver_sign_context_t;
+
+typedef union {
+    unsigned dummy; /* Make sure this union is always non-empty */
+#if defined(TF_PSA_CRYPTO_PQCP_MLDSA_ENABLED)
+    tf_psa_crypto_mldsa_operation_t pqcp;
+#endif
+#if defined(PSA_CRYPTO_DRIVER_TEST) && 0 /*not implemented yet*/
+    mbedtls_transparent_test_driver_verify_operation_t transparent_test_driver_ctx;
+    mbedtls_opaque_test_driver_verify_operation_t opaque_test_driver_ctx;
+#endif
+} psa_driver_verify_context_t;
 
 typedef union {
     unsigned dummy; /* Make sure this union is always non-empty */

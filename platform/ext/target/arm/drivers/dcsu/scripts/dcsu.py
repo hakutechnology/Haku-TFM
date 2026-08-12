@@ -17,8 +17,8 @@ logger = logging.getLogger("DCSU")
 def _chunk_bytes(x, n):
     return [x[i:i+n] for i in range(0, len(x), n)]
 
-def _round_up(x, boundary):
-    return ((x + (boundary - 1)) // boundary) * boundary
+def _value_fits_in_bits(value : int, bits : int):
+    return value <= ((1 << bits) - 1)
 
 class dcsu_tx_command(Enum):
     DCSU_TX_COMMAND_GENERATE_SOC_UNIQUE_ID = 0x1
@@ -36,6 +36,9 @@ class dcsu_tx_command(Enum):
     DCSU_TX_COMMAND_CANCEL_IMPORT_DATA_WITH_CHECKSUM = 0xD
     DCSU_TX_COMMAND_READ_COD_DATA = 0xE
     DCSU_TX_COMMAND_READ_EC_PARAMS = 0xF
+    DCSU_TX_COMMAND_SET_SE_DEV = 0x10
+    DCSU_TX_COMMAND_SET_PS_FC = 0x11
+    DCSU_TX_COMMAND_SET_FEATURE_CTRL = 0x12
 
 class dcsu_rx_command(Enum):
     DCSU_RX_COMMAND_IMPORT_READY = 0x1
@@ -59,6 +62,8 @@ class dcsu_tx_message_error(Enum):
     DCSU_TX_MSG_RESP_UNEXPECTED_NUMBER_OF_WORDS = 0xB
     DCSU_TX_MSG_RESP_UNEXPECTED_IMPORT = 0xC
     DCSU_TX_MSG_RESP_RANGE_NOT_INITIALIZED = 0xD
+    DCSU_TX_MSG_RESP_INVALID_CONTROL_PARAMETER = 0x13
+    DCSU_TX_MSG_RESP_INVALID_CONTROL_NUMBER = 0x14
     DCSU_TX_MSG_RESP_GENERIC_ERROR = 0xFE
     DCSU_TX_MSG_RESP_INVALID_COMMAND = 0xFF
 
@@ -80,30 +85,43 @@ def pre_parse_backend(backends : [str], parser : argparse.ArgumentParser, prefix
     parsed, _ = pre_arg_parser.parse_known_args()
     return parsed.backend
 
-def tx_command_send(backend, ctx, command : dcsu_tx_command, data : bytes = None, size = None, byteorder='little', checksum=True):
+def tx_command_send(backend, ctx, command : dcsu_tx_command, sw_def : int = None, param1 : int | None = None, data : bytes = None, size = None, byteorder='little', checksum=True):
+    assert _value_fits_in_bits(command.value, 8), "CMD must fit in 8 bits"
     command_word = command.value
 
-    if (data):
-        data_words = [int.from_bytes(b, byteorder=byteorder) for b in _chunk_bytes(data, 4)]
+    # Set software defined bits if provided
+    if (sw_def):
+        assert not checksum, "SW_DEF cannot be provided if checksum enabled"
+        assert _value_fits_in_bits(sw_def, 14), "SW_DEF must fit in 14 bits"
+        command_word |= sw_def << 10
 
-        assert (len(data_words) <= 4), "Data too large"
+    # Set PARAM1 field if provided
+    if (param1):
+        assert isinstance(param1, int), "PARAM1 must be an integer"
+        assert _value_fits_in_bits(param1, 2), "PARAM1 must fit in 2 bits"
+        command_word |= param1 << 8
+    else:
+        # If PARAM1 is not provided calculate number of words and pass it through data registers
+        if (data):
+            data_words = [int.from_bytes(b, byteorder=byteorder) for b in _chunk_bytes(data, 4)]
 
-        if (size is not None):
-            assert (len(data_words) == size), "Size does not match data"
+            assert (len(data_words) <= 4), "Data too large"
 
-        command_word |= ((len(data_words) - 1) & 0b11) << 8
+            if (size is not None):
+                assert (len(data_words) == size), "Size does not match data"
 
-        for r,w in zip(["DIAG_RX_DATA{}".format(i) for i in range(len(data_words))], data_words):
-            backend.write_register(ctx, r, w)
+            command_word |= ((len(data_words) - 1) & 0b11) << 8
 
-        if checksum:
-            checksum_value = sum(data) % ((1 << 14) - 1)
-            command_word |= (checksum_value & 0x3FFF) << 10
+            for r,w in zip(["DIAG_RX_DATA{}".format(i) for i in range(len(data_words))], data_words):
+                backend.write_register(ctx, r, w)
 
-    if (not data and size is not None):
-        assert (size <= 4), "Data too large"
-        command_word |= ((size - 1) & 0b11) << 8
+            if checksum:
+                checksum_value = sum(data) % ((1 << 14) - 1)
+                command_word |= (checksum_value & 0x3FFF) << 10
 
+        if (not data and size is not None):
+            assert (size <= 4), "Data too large"
+            command_word |= ((size - 1) & 0b11) << 8
     logger.info("Sending command {}".format(command.name))
     backend.write_register(ctx, "DIAG_RX_COMMAND", command_word)
 
@@ -128,17 +146,17 @@ def tx_command_read_data(backend, ctx, size, byteorder='little'):
 
 def rx_wait_for_command(backend, ctx, command : dcsu_rx_command):
     logger.info("Waiting for command {}".format(command.name))
-    while (recieved_command := backend.read_register(ctx, "DIAG_TX_COMMAND") & 0xFF) == 0:
+    while (received_command := backend.read_register(ctx, "DIAG_TX_COMMAND") & 0xFF) == 0:
         time.sleep(0.1)
 
-    assert (command.value == recieved_command), "Unexpected command {} received".format(dcsu_rx_command(recieved_command))
+    assert (command.value == received_command), "Unexpected command {} received".format(dcsu_rx_command(received_command))
 
 def rx_wait_for_any_command(backend, ctx) -> dcsu_rx_command:
     logger.info("Waiting for any command")
-    while (recieved_command := backend.read_register(ctx, "DIAG_TX_COMMAND") & 0xFF) == 0:
+    while (received_command := backend.read_register(ctx, "DIAG_TX_COMMAND") & 0xFF) == 0:
         time.sleep(0.1)
 
-    return dcsu_rx_command(recieved_command)
+    return dcsu_rx_command(received_command)
 
 def rx_command_receive(backend, ctx, command : dcsu_rx_command) -> bytes:
     rx_wait_for_command(backend, ctx, command)
@@ -154,13 +172,11 @@ def rx_command_receive(backend, ctx, command : dcsu_rx_command) -> bytes:
         data = None
 
     backend.write_register(ctx, "DIAG_TX_COMMAND", dcsu_rx_message_error.DCSU_RX_MSG_ERROR_SUCCESS.value << 24)
-    while (recieved_command := backend.read_register(ctx, "DIAG_TX_COMMAND") & 0xFF) != 0:
-        time.sleep(0.1)
-    backend.write_register(ctx, "DIAG_TX_COMMAND", 0)
+
     return data
 
 def _get_data_from_args(args:argparse.Namespace) -> bytes:
-    if args.data_file is not None:
+    if hasattr(args, "data_file") and args.data_file is not None:
         file = args.data_file
         with open(file, "rb") as f:
             data_bytes = f.read()
@@ -260,6 +276,25 @@ class provisioning_message_status(Enum):
     PROVISIONING_STATUS_SUCCESS_COMPLETE = 0x2
     PROVISIONING_STATUS_ERROR = 0x3
 
+# Must be kept synchronized with enum provisioning_message_report_step_t
+class provisioning_message_report(Enum):
+    PROVISIONING_REPORT_NO_MESSAGE = 0x0
+    PROVISIONING_REPORT_RUN_BLOB = 0x11111111
+    PROVISIONING_REPORT_SET_TP_MODE_PCI = 0x22221111
+    PROVISIONING_REPORT_SET_TP_MODE_TCI = 0x22222222
+    PROVISIONING_REPORT_BLOB_VALIDATED = 0x33333333
+    PROVISIONING_REPORT_CM_PROVISIONING_DONE = 0x44444444
+    PROVISIONING_REPORT_BL1_2_PROVISIONING_DONE = 0x44445555
+    PROVISIONING_REPORT_MANDATORY_CM_PROVISIONING_DONE = 0x55556666
+    PROVISIONING_REPORT_MANDATORY_EARLY_DM_PROVISIONING_DONE = 0x66667777
+    PROVISIONING_REPORT_OTHER_BLOB_DONE = 0x77778888
+    PROVISIONING_REPORT_PARSE_PLAIN_DATA = 0x88889999
+    PROVISIONING_REPORT_STEP_UPDATE_NON_ENDORSED_DM_ROTPKS = 0x9999AAAA
+    PROVISIONING_REPORT_STEP_UPDATE_CM_ROTPKS = 0x9999BBBB
+    PROVISIONING_REPORT_STEP_UPDATE_DM_ROTPKS = 0x9999CCCC
+    PROVISIONING_REPORT_GENERATE_CERTIFICATE = 0xBBBBAAAA
+    PROVISIONING_REPORT_VERIFY_CERTIFICATE = 0xCCCCAAAA
+
 def dcsu_rx_command_report_status(backend, ctx, args: argparse.Namespace):
     responses = []
     data = rx_command_receive(backend, ctx, dcsu_rx_command.DCSU_RX_COMMAND_REPORT_STATUS)
@@ -268,15 +303,15 @@ def dcsu_rx_command_report_status(backend, ctx, args: argparse.Namespace):
 
     match(status):
         case provisioning_message_status.PROVISIONING_STATUS_SUCCESS_CONTINUE:
-            report = int.from_bytes(data[4:8], 'little')
-            logger.info(f"Status Report {hex(report)}...")
+            report = provisioning_message_report(int.from_bytes(data[4:8], 'little'))
+            logger.info(f"Status Report {report}...")
             return 0
         case provisioning_message_status.PROVISIONING_STATUS_SUCCESS_COMPLETE:
-            report = int.from_bytes(data[4:8], 'little')
-            logger.info(f"Final Status Report {hex(report)}")
+            report = provisioning_message_report(int.from_bytes(data[4:8], 'little'))
+            logger.info(f"Final Status Report {report}")
             return 0
         case provisioning_message_status.PROVISIONING_STATUS_ERROR:
-            report = int.from_bytes(data[4:8], 'little')
+            report = provisioning_message_report(int.from_bytes(data[4:8], 'little'))
             err = int.from_bytes(data[8:12], 'little')
             logger.error(f"Error Report {report}: {hex(err)}")
             return err
@@ -297,14 +332,14 @@ def dcsu_tx_command_complete_import(backend, ctx, args: argparse.Namespace):
 
         match(status):
             case provisioning_message_status.PROVISIONING_STATUS_SUCCESS_CONTINUE:
-                report = int.from_bytes(data[4:8], 'little')
-                logger.info(f"Status Report {hex(report)}...")
+                report = provisioning_message_report(int.from_bytes(data[4:8], 'little'))
+                logger.info(f"Status Report {report}...")
             case provisioning_message_status.PROVISIONING_STATUS_SUCCESS_COMPLETE:
-                report = int.from_bytes(data[4:8], 'little')
-                logger.info(f"Final Status Report {hex(report)}")
+                report = provisioning_message_report(int.from_bytes(data[4:8], 'little'))
+                logger.info(f"Final Status Report {report}")
                 return res
             case provisioning_message_status.PROVISIONING_STATUS_ERROR:
-                report = int.from_bytes(data[4:8], 'little')
+                report = provisioning_message_report(int.from_bytes(data[4:8], 'little'))
                 err = int.from_bytes(data[8:12], 'little')
                 logger.error(f"Error Report {report}: {hex(err)}")
                 return err
@@ -354,20 +389,38 @@ def dcsu_rx_command_export_data(backend, ctx, args: argparse.Namespace):
     max_len = 0
 
     while not got_complete:
-        if (recieved_command := rx_wait_for_any_command(backend, ctx)) == \
+        if (received_command := rx_wait_for_any_command(backend, ctx)) == \
             dcsu_rx_command.DCSU_RX_COMMAND_COMPLETE_EXPORT_DATA:
             got_complete = True
 
-        if recieved_command == dcsu_rx_command.DCSU_RX_COMMAND_EXPORT_DATA_NO_CHECKSUM:
+        if received_command == dcsu_rx_command.DCSU_RX_COMMAND_EXPORT_DATA_NO_CHECKSUM:
             offset = backend.read_register(ctx, "DIAG_TX_LARGE_PARAM")
 
-        data = rx_command_receive(backend, ctx, recieved_command)
+        data = rx_command_receive(backend, ctx, received_command)
         if data is not None:
             max_len = offset + len(data)
             bytes_received[offset:max_len] = data
 
     return bytes(bytes_received[:max_len])
 
+def dcsu_tx_command_set_ps_fc(backend, ctx, args: argparse.Namespace):
+    res = tx_command_send(backend, ctx, dcsu_tx_command.DCSU_TX_COMMAND_SET_PS_FC,
+                          param1=args.value, sw_def=args.number)
+
+    return res, None
+
+def dcsu_tx_command_set_se_dev(backend, ctx, args: argparse.Namespace):
+    res = tx_command_send(backend, ctx, dcsu_tx_command.DCSU_TX_COMMAND_SET_SE_DEV,
+                          param1=args.value)
+
+    return res, None
+
+def dcsu_tx_command_set_feature_control(backend, ctx, args: argparse.Namespace):
+    data = int.from_bytes(_get_data_from_args(args), byteorder=args.byte_order)
+    backend.write_register(ctx, "DIAG_RX_LARGE_PARAM", data)
+    res = tx_command_send(backend, ctx, dcsu_tx_command.DCSU_TX_COMMAND_SET_FEATURE_CTRL)
+
+    return res, None
 
 def dcsu_command(backend, ctx, command, args: argparse.Namespace):
 
@@ -390,6 +443,9 @@ def dcsu_command(backend, ctx, command, args: argparse.Namespace):
         dcsu_rx_command.DCSU_RX_COMMAND_IMPORT_READY: dcsu_rx_command_import_ready,
         dcsu_rx_command.DCSU_RX_COMMAND_REPORT_STATUS: dcsu_rx_command_report_status,
         dcsu_rx_command.DCSU_RX_COMMAND_EXPORT_DATA_NO_CHECKSUM: dcsu_rx_command_export_data,
+        dcsu_tx_command.DCSU_TX_COMMAND_SET_SE_DEV: dcsu_tx_command_set_se_dev,
+        dcsu_tx_command.DCSU_TX_COMMAND_SET_PS_FC: dcsu_tx_command_set_ps_fc,
+        dcsu_tx_command.DCSU_TX_COMMAND_SET_FEATURE_CTRL: dcsu_tx_command_set_feature_control,
     }
     return dcsu_command_handlers[command](backend, ctx, args)
 
@@ -487,6 +543,18 @@ offset in the COD OTP area.
 The DCSU_TX_COMMAND_READ_EC_PARAMS command reads the data from the input
 offset in the endorsement certificate and params area.
 """,
+    "DCSU_TX_COMMAND_SET_SE_DEV": """
+The DCSU_TX_COMMAND_SET_SE_DEV command sets the SE_DEV soft life cycle state by updating the
+SE_DEV_CONTROL field in the OTP.
+""",
+    "DCSU_TX_COMMAND_SET_PS_FC": """
+The DCSU_TX_COMMAND_SET_PS_FC command sets the PS_FC_i OTP fields, which represent the state
+of product specific feature controls (default, product-specific policy mode, locked, or invalid).
+""",
+    "DCSU_TX_COMMAND_SET_FEATURE_CTRL": """
+The DCSU_TX_COMMAND_SET_FEATURE_CTRL command sets the FEATURE_CONTROL OTP field and the related
+DCU bits.
+""",
 }
 if __name__ == "__main__":
     backend_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "backends")
@@ -536,8 +604,21 @@ if __name__ == "__main__":
               "DCSU_TX_COMMAND_READ_SOC_IEEE_ECID",
               "DCSU_TX_COMMAND_READ_SOC_CONFIG_DATA",
               "DCSU_TX_COMMAND_READ_COD_DATA",
-              "DCSU_TX_COMMAND_READ_EC_PARAMS"]:
+              "DCSU_TX_COMMAND_READ_EC_PARAMS",
+              "DCSU_TX_COMMAND_SET_FEATURE_CTRL"]:
         parsers[c].add_argument("--byte-order", help="Byte order of data", default="little")
+
+    for c in ["DCSU_TX_COMMAND_SET_FEATURE_CTRL"]:
+        parsers[c].add_argument("--data",   help="Feature control value", default="0x00", required=True)
+
+    for c in ["DCSU_TX_COMMAND_SET_PS_FC"]:
+        parsers[c].add_argument("--number", help="Policy specific feature control number", type=int, choices=[1,2,3], required=True)
+
+    for c in ["DCSU_TX_COMMAND_SET_PS_FC",
+              "DCSU_TX_COMMAND_SET_SE_DEV"]:
+        mgroup = parsers[c].add_mutually_exclusive_group(required=True)
+        mgroup.add_argument("--enable", help="Enable control for the number", action="store_const", const=1, dest="value")
+        mgroup.add_argument("--disable", help="Disable control for the number", action="store_const", const=2, dest="value")
 
     backend_name = pre_parse_backend(backends, parser)
     try:
@@ -555,7 +636,7 @@ if __name__ == "__main__":
         if "_RX_" in args.command:
             command = dcsu_rx_command[args.command]
             logger.info(f"res: {hex(dcsu_command(backend, ctx, command, args))}")
-            exit(0)
+            sys.exit(0)
         else:
             command = dcsu_tx_command[args.command]
             match dcsu_command(backend, ctx, command, args):
@@ -563,6 +644,6 @@ if __name__ == "__main__":
                     logger.info(f"res {output}: {data.hex() if data is not None else data}")
                 case output:
                     logger.info(f"res {output}")
-            exit(0 if output == dcsu_tx_message_error.DCSU_TX_MSG_RESP_SUCCESS else output.value)
+            sys.exit(0 if output == dcsu_tx_message_error.DCSU_TX_MSG_RESP_SUCCESS else output.value)
     except KeyboardInterrupt:
-        exit(1)
+        sys.exit(1)

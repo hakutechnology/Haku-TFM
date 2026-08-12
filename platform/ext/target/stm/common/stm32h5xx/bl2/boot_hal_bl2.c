@@ -86,8 +86,20 @@ extern int  LL_SECU_UpdateRunTimeProtections(void);
 extern HAL_StatusTypeDef HAL_ICACHE_Enable(void);
 extern void LL_SECU_ApplyRunTimeProtections(void);
 extern void LL_SECU_CheckStaticProtections(void);
-extern ARM_DRIVER_FLASH FLASH_DEV_NAME;
 
+/* Flash device names must be specified by target */
+#ifdef FLASH_DEV_NAME
+extern ARM_DRIVER_FLASH FLASH_DEV_NAME;
+#endif /* FLASH_DEV_NAME */
+#ifdef FLASH_DEV_NAME_2
+extern ARM_DRIVER_FLASH FLASH_DEV_NAME_2;
+#endif /* FLASH_DEV_NAME_2 */
+#ifdef FLASH_DEV_NAME_3
+extern ARM_DRIVER_FLASH FLASH_DEV_NAME_3;
+#endif /* FLASH_DEV_NAME_3 */
+#ifdef FLASH_DEV_NAME_SCRATCH
+extern ARM_DRIVER_FLASH FLASH_DEV_NAME_SCRATCH;
+#endif /* FLASH_DEV_NAME_SCRATCH */
 
 #if defined(MCUBOOT_DOUBLE_SIGN_VERIF)
 /* Global variables to memorize images validation status */
@@ -385,10 +397,40 @@ void boot_platform_start_next_image(struct boot_arm_vector_table *vector)
 #ifdef BL2_DATA
     TFM_BL2_CopySharedData();
 #endif
+#ifdef CRYPTO_HW_ACCELERATOR
     (void)crypto_hw_accelerator_finish();
-
+#endif
 
     RNG_DeInit();
+
+#ifdef FLASH_DEV_NAME
+    if (FLASH_DEV_NAME.Uninitialize() != ARM_DRIVER_OK)
+    {
+        BOOT_LOG_ERR("Error while uninitializing Flash Interface");
+        Error_Handler();
+    }
+#endif /* FLASH_DEV_NAME */
+#ifdef FLASH_DEV_NAME_2
+    if (FLASH_DEV_NAME_2.Uninitialize() != ARM_DRIVER_OK)
+    {
+        BOOT_LOG_ERR("Error while uninitializing Flash Interface");
+        Error_Handler();
+    }
+#endif /* FLASH_DEV_NAME_2 */
+#ifdef FLASH_DEV_NAME_3
+    if (FLASH_DEV_NAME_3.Uninitialize() != ARM_DRIVER_OK)
+    {
+        BOOT_LOG_ERR("Error while uninitializing Flash Interface");
+        Error_Handler();
+    }
+#endif /* FLASH_DEV_NAME_3 */
+#ifdef FLASH_DEV_NAME_SCRATCH
+    if (FLASH_DEV_NAME_SCRATCH.Uninitialize() != ARM_DRIVER_OK)
+    {
+        BOOT_LOG_ERR("Error while uninitializing Flash Interface");
+        Error_Handler();
+    }
+#endif /* FLASH_DEV_NAME_SCRATCH */
 
     ICACHE_MONITOR_PRINT()
 
@@ -597,10 +639,12 @@ int32_t boot_platform_init(void)
       BOOT_LOG_ERR("Error while initializing RNG Ip");
       Error_Handler();
     }
+#ifdef CRYPTO_HW_ACCELERATOR
     if (crypto_hw_accelerator_init()){
       BOOT_LOG_ERR("Error while initializing HW accelerator Ip");
       Error_Handler();
     }
+#endif
     /* Start HW randomization */
     fih_delay_init();
     /* Apply Run time Protection */
@@ -617,11 +661,35 @@ int32_t boot_platform_init(void)
     LL_SECU_ApplyRunTimeProtections();
     /* Check static protections */
     LL_SECU_CheckStaticProtections();
+
+#ifdef FLASH_DEV_NAME
     if (FLASH_DEV_NAME.Initialize(NULL) != ARM_DRIVER_OK)
     {
         BOOT_LOG_ERR("Error while initializing Flash Interface");
         Error_Handler();
     }
+#endif /* FLASH_DEV_NAME */
+#ifdef FLASH_DEV_NAME_2
+    if (FLASH_DEV_NAME_2.Initialize(NULL) != ARM_DRIVER_OK)
+    {
+        BOOT_LOG_ERR("Error while initializing Flash Interface");
+        Error_Handler();
+    }
+#endif /* FLASH_DEV_NAME_2 */
+#ifdef FLASH_DEV_NAME_3
+    if (FLASH_DEV_NAME_3.Initialize(NULL) != ARM_DRIVER_OK)
+    {
+        BOOT_LOG_ERR("Error while initializing Flash Interface");
+        Error_Handler();
+    }
+#endif /* FLASH_DEV_NAME_3 */
+#ifdef FLASH_DEV_NAME_SCRATCH
+    if (FLASH_DEV_NAME_SCRATCH.Initialize(NULL) != ARM_DRIVER_OK)
+    {
+        BOOT_LOG_ERR("Error while initializing Flash Interface");
+        Error_Handler();
+    }
+#endif /* FLASH_DEV_NAME_SCRATCH */
 
 
 #ifdef MCUBOOT_EXT_LOADER

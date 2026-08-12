@@ -38,11 +38,6 @@ you enable FP support on your platforms.
     nor by non-secure images.
 
 .. Note::
-    FPU test issue has not been fixed yet on Musca-S1 [7]_. When running FPU
-    tests on Musca-S1, secure thread fails to trigger secure interrupt. FPU test
-    is disabled by default on Musca-S1 until the issue is fixed.
-
-.. Note::
     ``GNU Arm Embedded Toolchain 10.3-2021.10`` may have issue that reports
     ``'-mcpu=cortex-m55' conflicts with '-march=armv8.1-m.main'`` warning [8]_.
     This issue has been fixed in the later version.
@@ -91,10 +86,9 @@ The following CMake configurations configure ``COMPILER_CP_FLAG`` in TF-M SPE.
     set to ``hard``.
 
 .. Note::
-    If you build TF-M SPE with ``CONFIG_TFM_ENABLE_FP=on`` and provide your own
-    NSPE application, your own NSPE **must** take care of enabling floating point
-    coprocessors CP10 and CP11 on the NS side to avoid aforementioned NOCP usage
-    fault.
+    If TF-M SPE is built with ``CONFIG_TFM_ENABLE_FP=on``, then SPE takes care of
+    enabling floating point coprocessors CP10 and CP11 on the NS side. This is
+    done to avoid NOCP usage fault.
 
 * ``CONFIG_TFM_LAZY_STACKING`` is used to enable/disable lazy stacking
   feature. This feature is only valid for FP hardware ABI type.
@@ -146,8 +140,6 @@ Reference
 .. [5] `Arm® Platform Security Architecture Firmware Framework 1.0 <https://developer.arm.com/documentation/den0063/latest/>`_
 
 .. [6] :doc:`Secure Interrupt Integration Guide </integration_guide/tfm_secure_irq_integration_guide>`
-
-.. [7] `Musca-S1 Test Chip Board <https://developer.arm.com/documentation/101835/0000/?lang=en>`_
 
 .. [8] `GCC Issue on '-mcpu=cortex-m55' conflicts with '-march=armv8.1-m.main' Warning <https://gcc.gnu.org/bugzilla/show_bug.cgi?id=97327>`_
 

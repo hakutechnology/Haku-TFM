@@ -30,8 +30,18 @@
 /* Arm ATU driver structures */
 #ifdef ATU_S
 static const struct atu_dev_cfg_t ATU_DEV_CFG_S = {
-    .base = ATU_BASE_S};
+    .base = ATU_BASE_S,
+    .dyn_non_sec = {
+        .start = HOST_ACCESS_BASE_NS,
+        .size  = 0x4000000,
+    },
+    .dyn_sec = {
+        .start = HOST_ACCESS_BASE_S,
+        .size  = 0x4000000,
+    },
+};
 struct atu_dev_t ATU_DEV_S = {&ATU_DEV_CFG_S};
+struct atu_lib_t ATU_LIB_S;
 #endif
 
 /* Arm SIC driver structures */
@@ -402,24 +412,32 @@ struct systimer_armv8_m_dev_t SYSTIMER3_ARMV8_M_DEV_NS = {
 };
 #endif
 
-/* System Watchdogs */
-#ifdef SYSWDOG_ARMV8_M_S
-static const struct syswdog_armv8_m_dev_cfg_t
-SYSWDOG_ARMV8_M_DEV_CFG_S = {
-    .base = SYSWDOG_ARMV8_M_CNTRL_BASE_S
+#ifdef SLOWCLK_WATCHDOG_S
+static const struct arm_watchdog_dev_cfg_t SLOWCLK_WATCHDOG_DEV_CFG_S = {
+    .base = SLOWCLK_WDOG_CMSDK_BASE_S
 };
-struct syswdog_armv8_m_dev_t SYSWDOG_ARMV8_M_DEV_S = {
-    &(SYSWDOG_ARMV8_M_DEV_CFG_S)
+static struct arm_watchdog_dev_data_t SLOWCLK_WATCHDOG_DEV_DATA_S = {
+    .state = 0,
+    .timeout = 0
+};
+struct arm_watchdog_dev_t SLOWCLK_WATCHDOG_DEV_S = {
+    .cfg = &(SLOWCLK_WATCHDOG_DEV_CFG_S),
+    .data = &(SLOWCLK_WATCHDOG_DEV_DATA_S)
 };
 #endif
 
-#ifdef SYSWDOG_ARMV8_M_NS
-static const struct syswdog_armv8_m_dev_cfg_t
-SYSWDOG_ARMV8_M_DEV_CFG_NS = {
-    .base = SYSWDOG_ARMV8_M_CNTRL_BASE_NS
+#ifdef SLOWCLK_WATCHDOG_NS
+static const struct arm_watchdog_dev_cfg_t
+SLOWCLK_WATCHDOG_DEV_CFG_NS = {
+    .base = SLOWCLK_WDOG_CMSDK_BASE_NS
 };
-struct syswdog_armv8_m_dev_t SYSWDOG_ARMV8_M_DEV_NS = {
-    &(SYSWDOG_ARMV8_M_DEV_CFG_NS)
+static struct arm_watchdog_dev_data_t SLOWCLK_WATCHDOG_DEV_DATA_NS = {
+    .state = 0,
+    .timeout = 0
+};
+struct arm_watchdog_dev_t SLOWCLK_WATCHDOG_DEV_NS = {
+    .cfg = &(SLOWCLK_WATCHDOG_DEV_CFG_NS),
+    .data = &(SLOWCLK_WATCHDOG_DEV_DATA_NS)
 };
 #endif
 
@@ -652,10 +670,12 @@ pl061_regblk_t *const GPIO1_DEV_NS = (pl061_regblk_t *) GPIO1_BASE_NS;
 
 #ifdef MHU0_S
 struct mhu_v2_x_dev_t MHU0_SENDER_DEV_S = {
+    2,
     MHU0_SENDER_BASE_S,
     MHU_V2_X_SENDER_FRAME,
 };
 struct mhu_v2_x_dev_t MHU0_RECEIVER_DEV_S = {
+    2,
     MHU0_RECEIVER_BASE_S,
     MHU_V2_X_RECEIVER_FRAME,
 };
@@ -663,10 +683,12 @@ struct mhu_v2_x_dev_t MHU0_RECEIVER_DEV_S = {
 
 #ifdef MHU1_S
 struct mhu_v2_x_dev_t MHU1_SENDER_DEV_S = {
+    2,
     MHU1_SENDER_BASE_S,
     MHU_V2_X_SENDER_FRAME,
 };
 struct mhu_v2_x_dev_t MHU1_RECEIVER_DEV_S = {
+    2,
     MHU1_RECEIVER_BASE_S,
     MHU_V2_X_RECEIVER_FRAME,
 };
@@ -674,10 +696,12 @@ struct mhu_v2_x_dev_t MHU1_RECEIVER_DEV_S = {
 
 #ifdef MHU2_S
 struct mhu_v2_x_dev_t MHU2_SENDER_DEV_S = {
+    2,
     MHU2_SENDER_BASE_S,
     MHU_V2_X_SENDER_FRAME,
 };
 struct mhu_v2_x_dev_t MHU2_RECEIVER_DEV_S = {
+    2,
     MHU2_RECEIVER_BASE_S,
     MHU_V2_X_RECEIVER_FRAME,
 };
@@ -687,10 +711,12 @@ struct mhu_v2_x_dev_t MHU2_RECEIVER_DEV_S = {
 
 #ifdef MHU0_S
 struct mhu_v3_x_dev_t MHU0_SENDER_DEV_S = {
+    3,
     MHU0_SENDER_BASE_S,
     MHU_V3_X_PBX_FRAME,
 };
 struct mhu_v3_x_dev_t MHU0_RECEIVER_DEV_S = {
+    3,
     MHU0_RECEIVER_BASE_S,
     MHU_V3_X_MBX_FRAME,
 };
@@ -698,10 +724,12 @@ struct mhu_v3_x_dev_t MHU0_RECEIVER_DEV_S = {
 
 #ifdef MHU1_S
 struct mhu_v3_x_dev_t MHU1_SENDER_DEV_S = {
+    3,
     MHU1_SENDER_BASE_S,
     MHU_V3_X_PBX_FRAME,
 };
 struct mhu_v3_x_dev_t MHU1_RECEIVER_DEV_S = {
+    3,
     MHU1_RECEIVER_BASE_S,
     MHU_V3_X_MBX_FRAME,
 };
@@ -709,10 +737,12 @@ struct mhu_v3_x_dev_t MHU1_RECEIVER_DEV_S = {
 
 #ifdef MHU2_S
 struct mhu_v3_x_dev_t MHU2_SENDER_DEV_S = {
+    3,
     MHU2_SENDER_BASE_S,
     MHU_V3_X_PBX_FRAME,
 };
 struct mhu_v3_x_dev_t MHU2_RECEIVER_DEV_S = {
+    3,
     MHU2_RECEIVER_BASE_S,
     MHU_V3_X_MBX_FRAME,
 };
@@ -720,10 +750,12 @@ struct mhu_v3_x_dev_t MHU2_RECEIVER_DEV_S = {
 
 #ifdef MHU3_S
 struct mhu_v3_x_dev_t MHU3_SENDER_DEV_S = {
+    3,
     MHU3_SENDER_BASE_S,
     MHU_V3_X_PBX_FRAME,
 };
 struct mhu_v3_x_dev_t MHU3_RECEIVER_DEV_S = {
+    3,
     MHU3_RECEIVER_BASE_S,
     MHU_V3_X_MBX_FRAME,
 };
@@ -731,10 +763,12 @@ struct mhu_v3_x_dev_t MHU3_RECEIVER_DEV_S = {
 
 #ifdef MHU4_S
 struct mhu_v3_x_dev_t MHU4_SENDER_DEV_S = {
+    3,
     MHU4_SENDER_BASE_S,
     MHU_V3_X_PBX_FRAME,
 };
 struct mhu_v3_x_dev_t MHU4_RECEIVER_DEV_S = {
+    3,
     MHU4_RECEIVER_BASE_S,
     MHU_V3_X_MBX_FRAME,
 };
@@ -742,10 +776,12 @@ struct mhu_v3_x_dev_t MHU4_RECEIVER_DEV_S = {
 
 #ifdef MHU5_S
 struct mhu_v3_x_dev_t MHU5_SENDER_DEV_S = {
+    3,
     MHU5_SENDER_BASE_S,
     MHU_V3_X_PBX_FRAME,
 };
 struct mhu_v3_x_dev_t MHU5_RECEIVER_DEV_S = {
+    3,
     MHU5_RECEIVER_BASE_S,
     MHU_V3_X_MBX_FRAME,
 };
@@ -753,10 +789,12 @@ struct mhu_v3_x_dev_t MHU5_RECEIVER_DEV_S = {
 
 #ifdef MHU6_S
 struct mhu_v3_x_dev_t MHU6_SENDER_DEV_S = {
+    3,
     MHU6_SENDER_BASE_S,
     MHU_V3_X_PBX_FRAME,
 };
 struct mhu_v3_x_dev_t MHU6_RECEIVER_DEV_S = {
+    3,
     MHU6_RECEIVER_BASE_S,
     MHU_V3_X_MBX_FRAME,
 };
@@ -764,10 +802,12 @@ struct mhu_v3_x_dev_t MHU6_RECEIVER_DEV_S = {
 
 #ifdef MHU7_S
 struct mhu_v3_x_dev_t MHU7_SENDER_DEV_S = {
+    3,
     MHU7_SENDER_BASE_S,
     MHU_V3_X_PBX_FRAME,
 };
 struct mhu_v3_x_dev_t MHU7_RECEIVER_DEV_S = {
+    3,
     MHU7_RECEIVER_BASE_S,
     MHU_V3_X_MBX_FRAME,
 };
@@ -775,10 +815,12 @@ struct mhu_v3_x_dev_t MHU7_RECEIVER_DEV_S = {
 
 #ifdef MHU8_S
 struct mhu_v3_x_dev_t MHU8_SENDER_DEV_S = {
+    3,
     MHU8_SENDER_BASE_S,
     MHU_V3_X_PBX_FRAME,
 };
 struct mhu_v3_x_dev_t MHU8_RECEIVER_DEV_S = {
+    3,
     MHU8_RECEIVER_BASE_S,
     MHU_V3_X_MBX_FRAME,
 };

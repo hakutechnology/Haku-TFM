@@ -1,7 +1,5 @@
 /*
- * Copyright (c) 2018-2021, Arm Limited. All rights reserved.
- * Copyright (c) 2024 Cypress Semiconductor Corporation (an Infineon company)
- * or an affiliate of Cypress Semiconductor Corporation. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -9,6 +7,7 @@
 
 #include "ps_encrypted_object.h"
 
+#include <assert.h>
 #include <stddef.h>
 #include <string.h>
 
@@ -155,6 +154,15 @@ psa_status_t ps_encrypted_object_read(uint32_t fid,
     uint32_t decrypt_size;
     size_t data_length;
 
+#ifdef PS_ENCRYPTION
+    /*
+     * The destination buffer is the ps_object statically allocated  and ensured
+     * to be of proper size
+     */
+    assert((sizeof(*obj) - offsetof(struct ps_object_t, header.crypto.ref.iv)) >=
+        PS_MAX_ENCRYPTED_OBJ_SIZE + STORED_HEADER_DATA_SIZE);
+#endif
+
     /* Read the encrypted object from the persistent area. The data stored via
      * ITS interface of this `fid` is the IV together with the encrypted object.
      * In the psa_its_get, the buffer size is not checked. Check the buffer size
@@ -168,11 +176,19 @@ psa_status_t ps_encrypted_object_read(uint32_t fid,
         return err;
     }
 
-    /* Get the decrypt size. IV is also stored by ITS service. It is at the start
-     * of the read out data. Toolchains may add padding byte after iv array in
-     * crypto.ref structure.
+
+    /*
+     * Validate returned length and get the decrypt size.
+     * IV is also stored by ITS service. It is at the start of the read out data.
+     * Toolchains may add padding byte after iv array in crypto.ref structure.
      */
-    decrypt_size = data_length - STORED_HEADER_DATA_SIZE;
+    decrypt_size =
+        (data_length < STORED_HEADER_DATA_SIZE) ?
+            UINT32_MAX : (data_length - STORED_HEADER_DATA_SIZE);
+
+    if (decrypt_size > PS_MAX_ENCRYPTED_OBJ_SIZE) {
+        return PSA_ERROR_DATA_CORRUPT;
+    }
 
     /* Decrypt the object data */
     err = ps_object_auth_decrypt(fid, decrypt_size, obj, p_blocks);

@@ -25,6 +25,10 @@ David Hu
     :email: `David.Hu2@arm.com <David.Hu2@arm.com>`__
     :github: `davidhuziji <https://github.com/davidhuziji>`__
 
+Nicola Mazzucato
+    :email: `nicola.mazzucato@arm.com <nicola.mazzucato@arm.com>`__
+    :github: `nicola-mazzucato-arm <https://github.com/nicola-mazzucato-arm>`__
+
 Code owners
 ===========
 
@@ -85,6 +89,10 @@ Maulik Patel
     :email: `Maulik.Patel@arm.com <Maulik.Patel@arm.com>`__
     :github: `maulik-arm <https://github.com/maulik-arm>`__
 
+Mudit Sharma
+    :email: `Mudit.Sharma@arm.com <Mudit.Sharma@arm.com>`__
+    :github: `muditsharmaa-arm <https://github.com/muditsharmaa-arm>`__
+
 Platform Partition
 ------------------
 
@@ -123,8 +131,8 @@ Platform Owners
 Arm
 ---
 
-MPS2, MPS3, MPS4, Musca(B1,S1)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+MPS2, MPS3, MPS4, Musca-B1
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 David Hazi
     :email: `David.Hazi@arm.com <david.hazi@arm.com>`__
@@ -133,9 +141,9 @@ David Hazi
 Corstone1000
 ^^^^^^^^^^^^
 
-Hugues Kamba Mpiana
-    :email: `Hugues.KambaMpiana@arm.com <hugues.kambampiana@arm.com>`__
-    :github: `hugueskamba <https://github.com/hugueskamba>`__
+Harsimran Singh Tungal
+    :email: `Harsimran Singh Tungal" <HarsimranSingh.Tungal@arm.com>`__
+    :github: `hartun01 <https://github.com/hartun01>`__
 
 Emekcan Aras
     :email: `Emekcan.Aras@arm.com <emekcan.aras@arm.com>`__
@@ -177,9 +185,13 @@ Ruchika Gupta
 STM
 ---
 
-Ahmad EL JOUAID
-    :email: `ahmad.eljouaid@st.com <ahmad.eljouaid@st.com>`__
-    :github: `ahmadstm <https://github.com/ahmadstm>`__
+Ronan Gabou
+    :email: `ronan.gabou@st.com <ronan.gabou@st.com>`__
+    :github: `RGASTM <https://github.com/RGASTM>`__
+
+Marc Jacob
+    :email: `marc.jacob@st.com <marc.jacob@st.com>`__
+    :github: `MJASTM <https://github.com/MJASTM>`__
 
 Infineon/Cypress
 ----------------
@@ -187,13 +199,6 @@ Infineon/Cypress
 Chris Brand
     :email: `Chris Brand@cypress.com <chris.brand@cypress.com>`__
     :github: `UEWBot <https://github.com/UEWBot>`__
-
-Laird Connectivity
-------------------
-
-Greg Leach
-    :email: `Greg.Leach@lairdconnect.com <greg.leach@lairdconnect.com>`__
-    :github: `greg-leach <https://github.com/greg-leach>`__
 
 Nordic Semiconductor
 --------------------
@@ -229,6 +234,13 @@ Analog Devices Platform
 Sadik Ozer
     :email: `Sadik.Ozer@analog.com <Sadik.Ozer@analog.com>`__
     :github: `ozersa <https://github.com/ozersa>`__
+
+Texas Instruments
+-----------------
+
+UTKARSH Kripashankar
+    :email: `u-kripashankar@ti.com <u-kripashankar@ti.com>`__
+    :github: `Utkarsh-TII <https://github.com/Utkarsh-TII>`__
 
 -------------
 

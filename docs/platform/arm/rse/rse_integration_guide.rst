@@ -80,13 +80,13 @@ Boot HAL:
 
 Comms HAL:
 
-- ``rse_comms/rse_comms_permissions_hal.c``: Implements access control for RSE
+- ``sfcp/sfcp_permissions_hal.c``: Implements access control for RSE
   runtime service requests received over MHU. The platform should implement the
   ``comms_permissions_service_check()`` function to define which services can be
   accessed by an MHU endpoint. It should implement the
   ``comms_permissions_memory_check()`` function to control which host memory
   areas may be used to pass input and/or output parameters to RSE when using the
-  pointer access RSE comms protocol.
+  pointer access SFCP protocol.
 
 *******************
 Build configuration
@@ -107,7 +107,7 @@ Boot configuration
   example, if BL2 is loading RSE SPE, RSE NSPE, AP BL1 and SCP BL1 then set to
   ``4``. Defaults to ``4``.
 
-- ``RSE_LOAD_NS_IMAGE``: Set to ``ON`` to load an RSE NSPE image, or ``OFF`` to
+- ``TFM_LOAD_NS_IMAGE``: Set to ``ON`` to load an RSE NSPE image, or ``OFF`` to
   run SPE runtime firmware only on RSE. Defaults to ``ON``.
 
 - ``RSE_XIP``: Set to ``ON`` to execute the RSE SPE and RSE NSPE (if applicable)

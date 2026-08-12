@@ -1,7 +1,5 @@
 #-------------------------------------------------------------------------------
 # SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
-# Copyright (c) 2022-2024 Cypress Semiconductor Corporation (an Infineon company)
-# or an affiliate of Cypress Semiconductor Corporation. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -19,15 +17,15 @@ set(CMAKE_INSTALL_PREFIX                ${CMAKE_BINARY_DIR}/api_ns CACHE PATH "I
 set(INTERFACE_INC_DIR                   ${CMAKE_SOURCE_DIR}/interface/include)
 set(INTERFACE_SRC_DIR                   ${CMAKE_SOURCE_DIR}/interface/src)
 
-set(INSTALL_INTERFACE_INC_DIR           ${CMAKE_INSTALL_PREFIX}/interface/include)
-set(INSTALL_INTERFACE_SRC_DIR           ${CMAKE_INSTALL_PREFIX}/interface/src)
-set(INSTALL_INTERFACE_LIB_DIR           ${CMAKE_INSTALL_PREFIX}/interface/lib)
-set(INSTALL_IMAGE_SIGNING_DIR           ${CMAKE_INSTALL_PREFIX}/image_signing)
-set(INSTALL_CMAKE_DIR                   ${CMAKE_INSTALL_PREFIX}/cmake)
-set(INSTALL_CONFIG_DIR                  ${CMAKE_INSTALL_PREFIX}/config)
-set(INSTALL_PLATFORM_NS_DIR             ${CMAKE_INSTALL_PREFIX}/platform)
+# Install DESTINATION is relative to CMAKE_INSTALL_PREFIX
+set(INSTALL_INTERFACE_INC_DIR           interface/include)
+set(INSTALL_INTERFACE_SRC_DIR           interface/src)
+set(INSTALL_INTERFACE_LIB_DIR           interface/lib)
+set(INSTALL_IMAGE_SIGNING_DIR           image_signing)
+set(INSTALL_CMAKE_DIR                   cmake)
+set(INSTALL_CONFIG_DIR                  config)
+set(INSTALL_PLATFORM_NS_DIR             platform)
 
-set(TFM_DEBUG_SYMBOLS                   ON          CACHE BOOL      "Add debug symbols. Note that setting CMAKE_BUILD_TYPE to Debug or RelWithDebInfo will also add debug symbols.")
 set(TFM_DEBUG_OPTIMISATION              OFF         CACHE BOOL      "Add basic -Og optimisation when CMAKE_BUILD_TYPE is Debug. Note that non Debug builds specify their own optimisation")
 set(TFM_CODE_COVERAGE                   OFF         CACHE BOOL      "Whether to build the binary for lcov tools")
 
@@ -36,21 +34,35 @@ set(TFM_TESTS_REVISION_CHECKS           ON          CACHE BOOL      "Whether to 
 set(PROJECT_CONFIG_HEADER_FILE          ""          CACHE FILEPATH  "User defined header file for TF-M config")
 
 # External libraries source and version
-set(MBEDCRYPTO_PATH                     "DOWNLOAD"  CACHE PATH      "Path to Mbed Crypto (or DOWNLOAD to fetch automatically")
-set(MBEDCRYPTO_FORCE_PATCH              OFF         CACHE BOOL      "Always apply MBed Crypto patches")
-set(MBEDCRYPTO_VERSION                  "mbedtls-3.6.3" CACHE STRING "The version of Mbed Crypto to use")
-set(MBEDCRYPTO_GIT_REMOTE               "https://github.com/Mbed-TLS/mbedtls.git" CACHE STRING "The URL (or path) to retrieve MbedTLS from.")
+set(TF_PSA_CRYPTO_PATH                  "DOWNLOAD"  CACHE PATH      "Path to TF-PSA-Crypto (or DOWNLOAD to fetch automatically")
+set(TF_PSA_CRYPTO_VERSION               "v1.2.0"    CACHE STRING    "The version of TF-PSA-Crypto to use")
+set(TF_PSA_CRYPTO_FORCE_PATCH           OFF         CACHE BOOL      "Always apply TF-PSA-Crypto patches")
+set(TF_PSA_CRYPTO_GIT_REMOTE            "https://github.com/Mbed-TLS/TF-PSA-Crypto" CACHE STRING "The URL to retrieve TF-PSA-Crypto from.")
 
-set(MCUBOOT_PATH                        "DOWNLOAD"  CACHE PATH      "Path to MCUboot (or DOWNLOAD to fetch automatically")
+set(MCUBOOT_PATH                        "DOWNLOAD"   CACHE PATH     "Path to MCUboot (or DOWNLOAD to fetch automatically")
+set(MCUBOOT_VERSION                     "v2.4.0"     CACHE STRING   "The version of MCUboot to use")
+set(MCUBOOT_GIT_REMOTE                  "https://github.com/mcu-tools/mcuboot.git" CACHE STRING "The URL to retrieve MCUboot from.")
+set(MCUBOOT_GIT_SHALLOW                 ON           CACHE BOOL     "Whether to perform a shallow clone of the MCUboot repository")
+set(MCUBOOT_PATCH_DIR                   "${CMAKE_SOURCE_DIR}/lib/ext/mcuboot"      CACHE PATH   "Path to local folder which contains patches for MCUboot")
 set(MCUBOOT_FORCE_PATCH                 OFF         CACHE BOOL      "Always apply MCUboot patches")
-set(MCUBOOT_VERSION                     "v2.2.0"    CACHE STRING    "The version of MCUboot to use")
 
 set(TFM_EXTRAS_REPO_PATH                "DOWNLOAD"  CACHE PATH      "Path to tf-m-extras repo (or DOWNLOAD to fetch automatically")
-set(TFM_EXTRAS_REPO_VERSION             "363bf42"   CACHE STRING    "The version of tf-m-extras to use")
+set(TFM_EXTRAS_GIT_REMOTE               "https://git.trustedfirmware.org/TF-M/tf-m-extras.git" CACHE STRING "The URL to retrieve tf-m-extras from")
+set(TFM_EXTRAS_REPO_VERSION             "d6648c73"  CACHE STRING    "The version of tf-m-extras to use")
+
+set(LIB_EVENTLOG_PATH                   "DOWNLOAD"  CACHE PATH      "Path to LibEventLog repo (or DOWNLOAD to fetch automatically")
+set(LIB_EVENTLOG_GIT_REMOTE             "https://git.trustedfirmware.org/shared/libEventLog" CACHE STRING "The URL to retrieve LibEventLog from.")
+set(LIB_EVENTLOG_VERSION                "587406db"  CACHE STRING    "The version of LibEventLog to use")
+set(EVENT_LOG_BUFFER_SIZE               "0x170"     CACHE STRING    "Size of event log buffer size")
+
+set(LIB_DTPM_GIT_REMOTE                 "https://git.trustedfirmware.org/shared/libTPM" CACHE STRING "The URL to retrieve LibTPM from.")
+set(LIB_DTPM_VERSION                    "119bfd8"   CACHE STRING    "The version of LibTPM to use")
 
 set(PLATFORM_PSA_ADAC_SECURE_DEBUG      FALSE       CACHE BOOL      "Whether to use psa-adac secure debug.")
+set(PSA_ADAC_AS_TFM_RUNTIME_SERVICE     OFF         CACHE BOOL      "Integrate ADAC as TF-M runtime service")
 set(PLATFORM_PSA_ADAC_SOURCE_PATH       "DOWNLOAD"  CACHE PATH      "Path to source dir of psa-adac.")
-set(PLATFORM_PSA_ADAC_VERSION           "819a254"   CACHE STRING    "The version of psa-adac to use.")
+set(PLATFORM_PSA_ADAC_GIT_REMOTE        "https://git.trustedfirmware.org/shared/psa-adac.git" CACHE STRING "The URL to retrieve psa-adac from.")
+set(PLATFORM_PSA_ADAC_VERSION           "eff89e8"   CACHE STRING    "The version of psa-adac to use.")
 set(PLATFORM_RAM_FS                     OFF         CACHE BOOL      "Enables the use of RAM instead of the persistent storage device to store the FS in Secure Storage services")
 
 set(PLATFORM_IS_FVP                     FALSE       CACHE BOOL      "Whether to enable FVP or FPGA build of the platform.")
@@ -59,6 +71,9 @@ set(CODE_SHARING_OUTPUT_FILE_SUFFIX     "_shared_symbols.axf" CACHE STRING "Suff
 set(CODE_SHARING_INPUT_FILE_SUFFIX      "_shared_symbols.axf" CACHE STRING "Suffix to use for code-sharing input files")
 
 set(CONFIG_TFM_WARNINGS_ARE_ERRORS      OFF         CACHE BOOL      "Whether to treat warnings as errors")
+set(CONFIG_TFM_INCLUDE_STDLIBC          OFF         CACHE BOOL      "Include standard C libraries and startup code in GCC and ATfE toolchains")
+
+set(CONFIG_TFM_REUSE_COPY_AREA_FOR_SP_STACKS   OFF         CACHE BOOL      "Whether to reuse copy area as SP stacks at runtime")
 
 ####################################################################################################
 # These configurations below are also referred by Kconfig configuration system,
@@ -89,10 +104,12 @@ set(CONFIG_TFM_BOOT_STORE_ENCODED_MEASUREMENTS  ON  CACHE BOOL      "Enable stor
 set(TFM_PXN_ENABLE                      OFF         CACHE BOOL      "Use Privileged execute never (PXN)")
 
 set(TFM_EXCEPTION_INFO_DUMP             OFF         CACHE BOOL      "On fatal errors in the secure firmware, capture info about the exception. Print the info if the SPM log level is sufficient.")
+set(TFM_EXCEPTION_DUMP_LVL              LOG_LEVEL_VERBOSE CACHE STRING "Set default exception dump log level as VERBOSE level.")
 set(TFM_LOG_FATAL_ERRORS                OFF         CACHE BOOL      "Log fatal errors when they occur to aid debugging")
 set(TFM_LOG_NONFATAL_ERRORS             OFF         CACHE BOOL      "Log non-fatal errors when they occur to aid debugging")
 set(TFM_HALT_ON_FATAL_ERRORS            OFF         CACHE BOOL      "On fatal errors in the secure firmware, halt immediately to allow debugging")
 set(TFM_LOG_ERR_FILE_AND_LINE           OFF         CACHE BOOL      "Log file name and line numbers of fatal and non-fatal errors")
+set(TFM_LOAD_NS_IMAGE                   ON          CACHE BOOL      "Whether to load an NS image")
 
 set(CONFIG_TFM_HALT_ON_CORE_PANIC       OFF         CACHE BOOL       "On fatal errors in the secure firmware, halt instead of rebooting.")
 set(CONFIG_TFM_BACKTRACE_ON_CORE_PANIC  OFF         CACHE BOOL       "On fatal errors in secure firmware, log backtrace and then halt")
@@ -129,13 +146,17 @@ set(PLATFORM_DEFAULT_UART_STDOUT        ON          CACHE BOOL      "Use default
 set(PLATFORM_DEFAULT_NV_SEED            ON          CACHE BOOL      "Use default NV seed implementation.")
 set(PLATFORM_DEFAULT_SHARED_MEASUREMENT_DATA ON     CACHE BOOL      "Use default shared measurement data location")
 set(PLATFORM_DEFAULT_OTP                ON          CACHE BOOL      "Use trusted on-chip flash to implement OTP memory")
+set(PLATFORM_DEFAULT_MEASUREMENT_SLOTS  ON          CACHE BOOL     "Use default Measured Boot slots")
 set(PLATFORM_DEFAULT_OTP_WRITEABLE      ON          CACHE BOOL      "Use OTP memory with write support")
 set(PLATFORM_DEFAULT_PROVISIONING       ON          CACHE BOOL      "Use default provisioning implementation")
 set(PLATFORM_DEFAULT_SYSTEM_RESET_HALT  ON          CACHE BOOL      "Use default system reset/halt implementation")
 set(PLATFORM_DEFAULT_IMAGE_SIGNING      ON          CACHE BOOL      "Use default image signing implementation")
 set(PLATFORM_DEFAULT_PROV_LINKER_SCRIPT ON          CACHE BOOL      "Use default provisioning linker script")
 
+set(PLATFORM_GPT_LIBRARY                OFF         CACHE BOOL      "Whether to build the GPT library or not")
+
 set(TFM_DUMMY_PROVISIONING              ON          CACHE BOOL      "Provision with dummy values. NOT to be used in production")
+set(PROFILE_DEFINITION_LARGE            OFF         CACHE BOOL      "Use the 48 byte 'profile_definition' declaration used between v2.2.0 and v2.2.2")
 
 set(BL2_HEADER_SIZE                     0x000       CACHE STRING    "BL2 Header size")
 set(BL2_TRAILER_SIZE                    0x000       CACHE STRING    "BL2 Trailer size")
@@ -153,6 +174,7 @@ set(ITS_ENCRYPTION                   OFF         CACHE BOOL      "Enable authent
 
 set(TFM_PARTITION_CRYPTO                OFF         CACHE BOOL      "Enable Crypto partition")
 set(CRYPTO_TFM_BUILTIN_KEYS_DRIVER      ON          CACHE BOOL      "Whether to allow crypto service to store builtin keys. Without this, ALL builtin keys must be stored in a platform-specific location")
+set(CRYPTO_TFM_OPAQUE_KEYS_DRIVER       OFF         CACHE BOOL      "Whether to allow crypto service to use opaque keys. This allows accessing hardware-managed keys, which cannot be read by software")
 
 set(TFM_PARTITION_INITIAL_ATTESTATION   OFF         CACHE BOOL      "Enable Initial Attestation partition")
 set(SYMMETRIC_INITIAL_ATTESTATION       OFF         CACHE BOOL      "Use symmetric crypto for inital attestation")
@@ -161,19 +183,22 @@ set(PSA_INITIAL_ATTEST_MAX_TOKEN_SIZE   0x250       CACHE STRING    "The maximum
 
 set(TFM_PARTITION_PLATFORM              OFF         CACHE BOOL      "Enable Platform partition")
 
+set(TFM_TZ_REENTRANCY_CHECK             OFF         CACHE BOOL      "Enable check on Armv8-M integrity signature to prevent reentrancy")
+
 ############################ Mbedcrypto configurations #########################
 
-set(MBEDCRYPTO_BUILD_TYPE               "${CMAKE_BUILD_TYPE}" CACHE STRING "Build type of Mbed Crypto library")
-set(TFM_MBEDCRYPTO_CONFIG_PATH
-  "${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/tfm_mbedcrypto_config_default.h" CACHE PATH
-  "Config to use for Mbed Crypto. For increased flexibility when pointing to a file, set the type \
-of this setting to 'STRING' by passing the :<type> portion when specifying the setting value in \
-the command line. E.g. '-DTFM_MBEDCRYPTO_CONFIG_PATH:STRING=some_file_which_is_generated.h' \
-This can be useful if the config file is generated and placed inside a directory already added \
-to the include path of Mbed TLS.")
-set(TFM_MBEDCRYPTO_CONFIG_CLIENT_PATH         "${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/tfm_mbedcrypto_config_client.h" CACHE PATH "Bare minimum config required on the client side.")
-set(TFM_MBEDCRYPTO_PSA_CRYPTO_CONFIG_PATH     "${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/crypto_config_default.h" CACHE PATH "Config to use PSA Crypto setting for Mbed Crypto.")
-set(TFM_MBEDCRYPTO_PLATFORM_EXTRA_CONFIG_PATH ""    CACHE PATH      "Config to append to standard Mbed Crypto config, used by platforms to configure feature support")
+set(TF_PSA_CRYPTO_BUILD_TYPE  "${CMAKE_BUILD_TYPE}" CACHE STRING    "Build type of TF-PSA-Crypto library")
+set(TFM_TF_PSA_CRYPTO_CONFIG_PATH
+    "${CMAKE_SOURCE_DIR}/lib/ext/tf-psa-crypto/tfpsacrypto_config/crypto_config_default.h" CACHE FILEPATH
+    "Config to use for TF-PSA-Crypto. For increased flexibility when pointing to a file, set the type \
+    of this setting to 'STRING' by passing the :<type> portion when specifying the setting value in \
+    the command line. E.g. '-DTFM_TF_PSA_CRYPTO_CONFIG_PATH:STRING=some_file_which_is_generated.h' \
+    This can be useful if the config file is generated and placed inside a directory already added \
+    to the include path of TF-PSA-Crypto.")
+set(TFM_TF_PSA_CRYPTO_PLATFORM_EXTRA_CONFIG_PATH "" CACHE FILEPATH  "Config to append to standard TF-PSA-Crypto config, used by platforms to configure cryptographic feature support")
+set(MBEDTLS_PSA_CRYPTO_PLATFORM_FILE             "" CACHE PATH      "Platform specific MbedTLS PSA Crypto definitions file.")
+
+set(TFM_INSTALL_TF_PSA_CRYPTO_HEADERS    ON         CACHE BOOL      "Install TF-PSA-Crypto include files to interface directory")
 
 ########################## TF-M performance ####################################
 
@@ -211,3 +236,9 @@ set_property(CACHE BL1_1_SANITIZE PROPERTY STRINGS ${SANITIZE_OPTIONS})
 set_property(CACHE BL1_2_SANITIZE PROPERTY STRINGS ${SANITIZE_OPTIONS})
 set_property(CACHE BL2_SANITIZE   PROPERTY STRINGS ${SANITIZE_OPTIONS})
 set_property(CACHE TFM_SANITIZE   PROPERTY STRINGS ${SANITIZE_OPTIONS})
+
+########################## TF-M hex file generation ############################
+
+set(TFM_MERGE_HEX_FILES                    OFF        CACHE BOOL   "Create merged hex file in the end of the build")
+set(TFM_S_HEX_FILE_PATH                    ""         CACHE STRING "Merged secure hex file's path")
+set(TFM_S_HEX_MERGE_LIST                   ""         CACHE STRING "Merged secure hex file's target list")

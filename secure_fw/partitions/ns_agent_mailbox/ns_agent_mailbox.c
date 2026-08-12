@@ -19,7 +19,7 @@
 #include "tfm_rpc.h"
 #include "tfm_log_unpriv.h"
 
-#include "compiler_ext_defs.h"
+#include "compiler_ext_defs.h" /* Keep last. */
 
 static void boot_ns_core(void)
 {
@@ -57,7 +57,8 @@ void ns_agent_mailbox_entry(void)
             signals &= ~ASYNC_MSG_REPLY;
         }
 #endif
-#if (CONFIG_TFM_HYBRID_PLAT_SCHED_TYPE != TFM_HYBRID_PLAT_SCHED_OFF)
+#if (CONFIG_TFM_HYBRID_PLAT_SCHED_TYPE == TFM_HYBRID_PLAT_SCHED_NSPE) || \
+    (CONFIG_TFM_HYBRID_PLAT_SCHED_TYPE == TFM_HYBRID_PLAT_SCHED_BALANCED)
         if (signals & NS_AGENT_MBOX_PROCESS_NEW_MSG_SIGNAL) {
             psa_status_t status;
             psa_msg_t msg;

@@ -12,6 +12,23 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#if defined(DOMAIN_NS) && (DOMAIN_NS == 1)
+#define CFI_FLASH_LOG_MSG(...)
+#else
+#include "tfm_log.h"
+#define CFI_FLASH_LOG_MSG(...) VERBOSE_RAW(__VA_ARGS__)
+#endif /* DOMAIN_NS && DOMAIN_NS == 1 */
+
+#if TFM_UNIQUE_ERROR_CODES == 1
+#include "error_codes_mapping.h"
+#else
+#define CFI_ERROR_BASE 0x1u
+#endif /* TFM_UNIQUE_ERROR_CODES */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* First bus cycle */
 #define NOR_CMD_READ_ARRAY		0xFF
 #define NOR_CMD_READ_ID_CODE		0x90
@@ -41,20 +58,15 @@
 /* Set 1 to enable debug messages */
 #define DEBUG_CFI_FLASH         0
 
-#include <stdio.h>
-#if (DEBUG_CFI_FLASH == 1)
-    #define CFI_FLASH_LOG_MSG(f_, ...) printf((f_), ##__VA_ARGS__)
-#else
-    #define CFI_FLASH_LOG_MSG(f_, ...)
-#endif
-
 enum cfi_error_t {
     CFI_ERR_NONE,
-    CFI_ERR_WRONG_ARGUMENT,
+    CFI_ERR_WRONG_ARGUMENT = CFI_ERROR_BASE,
     CFI_ERR_NOT_INITIALIZED,
     CFI_ERR_DEV_BUSY,
     CFI_ERR_GENERAL_IO,
-    CFI_ERR_DEV_PROTECTED
+    CFI_ERR_DEV_PROTECTED,
+    /* Ensure enum is in 32-bit range always */
+    _CFI_ERR_MAX = UINT32_MAX
 };
 
 /**
@@ -82,4 +94,9 @@ enum cfi_error_t nor_erase(uintptr_t base_addr);
 unsigned int nor_id_check(uintptr_t base_addr);
 uint8_t nor_cfi_reg_read(uintptr_t addr);
 void nor_cfi_reg_write(uintptr_t addr, uint32_t value);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

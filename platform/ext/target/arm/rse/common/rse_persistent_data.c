@@ -9,26 +9,20 @@
 #include <stdbool.h>
 #include <string.h>
 #include "region_defs.h"
-
-/*
- * Magic value used to check if the persistent region is initialized.
- *
- * This can also be used to avoid versioning issues. If a change is made to the
- * struct that would break compatibility with older ROMs then the magic value
- * can be changed to make it clear that it is no longer compatible with old
- * ROMs.
- */
-#define RSE_PERSISTENT_DATA_MAGIC 0xDA1ABA5E
+#include "device_definition.h"
 
 static bool is_persistent_data_initialized(struct rse_persistent_data *persistent_data)
 {
-    return persistent_data->bl1_data.initialized_magic == RSE_PERSISTENT_DATA_MAGIC;
+    return RSE_GET_PERSISTENT_DATA_INITIALIZED_FLAG();
 }
 
 static void initialize_rse_persistent_data(struct rse_persistent_data *persistent_data)
 {
     memset(persistent_data, 0, sizeof(struct rse_persistent_data));
-    persistent_data->bl1_data.initialized_magic = RSE_PERSISTENT_DATA_MAGIC;
+
+    RSE_SET_PERSISTENT_DATA_FLAG(RSE_PERSISTENT_DATA_FLAGS_LAST_BOOT_DEBUG_CODE,
+                                 LAST_BOOT_DEBUG_CODE_BLOCK_CERT_DEBUG);
+    RSE_SET_PERSISTENT_DATA_INITIALISED_FLAG(1);
 }
 
 void rse_setup_persistent_data(void)
@@ -43,4 +37,9 @@ void rse_setup_persistent_data(void)
     if (!is_persistent_data_initialized(RSE_PERSISTENT_DATA)) {
         initialize_rse_persistent_data(RSE_PERSISTENT_DATA);
     }
+
+#ifdef RSE_ENABLE_CHIP_OUTPUT_DATA
+    /* Assume that the COD reply validity across cold resets is not guaranteed */
+    RSE_PERSISTENT_DATA->bl1_data.cod_reply_is_valid = false;
+#endif /* RSE_ENABLE_CHIP_OUTPUT_DATA */
 }

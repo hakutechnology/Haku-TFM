@@ -151,11 +151,8 @@ define block ER_RO_DATA {
  * Sort the partition info by priority to guarantee the initing order.
  * The first loaded partition will be inited at last in SFN model.
  */
-define block TFM_SP_LOAD_LIST with alignment = 4 {
-    ro section .part_load_priority_00,
-    ro section .part_load_priority_01,
-    ro section .part_load_priority_02,
-    ro section .part_load_priority_03,
+define block TFM_SP_LOAD_LIST with alignment = TFM_LINKER_PT_RO_DATA_ALIGNMENT {
+    ro section .part_load
 };
 
 /* Position tag: End of RO-Data (unprivileged, execute-never) */
@@ -167,7 +164,7 @@ initialize by copy {
     ro object *libflash_drivers*,
 };
 
-define block ER_CODE_SRAM with fixed order, alignment = 4, maximum size = S_RAM_CODE_SIZE {
+define block ER_CODE_SRAM with fixed order, alignment = 32, maximum size = S_RAM_CODE_SIZE {
     rw section .text,
     rw section .rodata,
     rw section .textrw, /* __ramfunc */
@@ -248,7 +245,7 @@ define block STACKSEAL with size = STACKSEAL_SIZE { };
 #endif
 
 #ifdef ENABLE_HEAP
-    define block HEAP with alignment = 8, size = S_HEAP_SIZE { };
+    define block HEAP with alignment = TFM_LINKER_TFM_HEAP_ALIGNMENT, size = S_HEAP_SIZE { };
     define block ARM_LIB_HEAP {block HEAP};
     keep {block HEAP, block ARM_LIB_HEAP};
 #endif
@@ -283,19 +280,13 @@ define block ER_TFM_DATA {
 };
 
 /* The runtime partition placed order is same as load partition */
-define block ER_PART_RT_POOL with alignment = 4 {
-    zi section .bss.part_runtime_priority_00,
-    zi section .bss.part_runtime_priority_01,
-    zi section .bss.part_runtime_priority_02,
-    zi section .bss.part_runtime_priority_03,
+define block ER_PART_RT_POOL with alignment = TFM_LINKER_TFM_BSS_ALIGNMENT {
+    zi section .bss.part_runtime
 };
 
 /* The runtime service placed order is same as load partition */
-define block ER_SERV_RT_POOL with alignment = 4 {
-    zi section .bss.serv_runtime_priority_00,
-    zi section .bss.serv_runtime_priority_01,
-    zi section .bss.serv_runtime_priority_02,
-    zi section .bss.serv_runtime_priority_03,
+define block ER_SERV_RT_POOL with alignment = TFM_LINKER_TFM_BSS_ALIGNMENT {
+    zi section .bss.serv_runtime
 };
 
 keep {block ER_PART_RT_POOL, block ER_SERV_RT_POOL};

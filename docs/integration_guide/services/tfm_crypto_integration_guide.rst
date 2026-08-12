@@ -86,9 +86,9 @@ A brief description of what is implemented by each source file is as below:
    ``CRYPTO_IOVEC_BUFFER_SIZE`` config define
  - ``crypto_library.c`` : Library abstractions to interface the dispatchers
    towards the underlying library providing *backend* crypto functions.
-   Currently this only supports the Mbed TLS library. In particular, the mbed
-   TLS library requires to provide a static buffer to be used as heap for its
-   internal allocation. The size of this buffer is controlled by the
+   Currently this only supports the TF-PSA-Crypto library. In particular, the
+   TF-PSA-Crypto library requires to provide a static buffer to be used as heap
+   for its internal allocation. The size of this buffer is controlled by the
    ``CRYPTO_ENGINE_BUF_SIZE`` config define
  - ``crypto_alloc.c`` : Takes care of storing multipart operation contexts in a
    secure memory not visible outside of the crypto service. The
@@ -122,27 +122,25 @@ Crypto *backend* library configuration
 ======================================
 The TF-M Crypto service relies on a cryptographic library to provide the
 functionalities specific by the PSA Crypto API spec and the PSA cryptoprocessor
-driver interface spec. At the moment, the only supported library is mbed
-TLS [3]_.
+driver interface spec. At the moment, the only supported library is
+TF-PSA-Crypto [3]_.
 
 The configuration of the backend library is supplied using the
-``TFM_MBEDCRYPTO_CONFIG_PATH`` and ``TFM_MBEDCRYPTO_PSA_CRYPTO_CONFIG_PATH``
-config option that point to configuration headers following the legacy Mbed TLS
-configuration scheme or the new PSA based configuration scheme.
+``TFM_TF_PSA_CRYPTO_CONFIG_PATH`` config option that points to a configuration
+header following the configuration scheme of TF-PSA-Crypto.
 
 Platforms can specify an extra config file by setting the
-``TFM_MBEDCRYPTO_PLATFORM_EXTRA_CONFIG_PATH`` variable (which is a wrapper
-around the ``MBEDTLS_USER_CONFIG_FILE`` option).  This is preferred for platform
-configuration over ``TFM_MBEDCRYPTO_CONFIG_PATH`` and
-``TFM_MBEDCRYPTO_PSA_CRYPTO_CONFIG_PATH`` as it does not interfere with
-config changes due to TFM Profile.
+``TFM_TF_PSA_CRYPTO_PLATFORM_EXTRA_CONFIG_PATH`` variable (which is a wrapper
+around the ``TF_PSA_CRYPTO_USER_CONFIG_FILE`` option). This is preferred for
+platform configuration over ``TFM_TF_PSA_CRYPTO_CONFIG_PATH`` as it does not
+interfere with config changes due to TFM Profile.
 
 .. Note::
 
-    The default entropy source configured for Mbed TLS is
+    The default entropy source configured for TF-PSA-Crypto is
     ``MBEDTLS_ENTROPY_NV_SEED`` with a unique seed. For production devices, an
     alternative hardware entropy source can be specified using the config option
-    ``MBEDTLS_ENTROPY_HARDWARE_ALT``
+    ``MBEDTLS_PSA_DRIVER_GET_ENTROPY``
 
 .. Note::
     Starting from Mbed TLS 3.3.0, the Python package ``jsonschema`` must be
@@ -171,19 +169,21 @@ available in the ``tfm_builtin_key_loader``
 .. Note::
 
     The crypto service integration with builtin keys relies on implementation
-    details of Mbed TLS that are not standardized in the spec and might change
-    between releases due to ongoing work [4]_
+    details of TF-PSA-Crypto that are not standardized in the spec and might
+    change between releases due to ongoing work [4]_
 
 
 References
 ----------
 
-.. [1] PSA Crypto APIs: \ https://armmbed.github.io/mbed-crypto/html/
+.. [1] PSA Crypto APIs: \ https://arm-software.github.io/psa-api/crypto/1.1/
 .. [2] PSA cryptoprocessor driver interface: \ https://github.com/Mbed-TLS/TF-PSA-Crypto/blob/development/docs/proposed/psa-driver-interface.md
-.. [3] Mbed TLS library: \ https://www.trustedfirmware.org/projects/mbed-tls/
+.. [3] TF-PSA-Crypto library: \ https://github.com/Mbed-TLS/TF-PSA-Crypto/
 .. [4] Interface for platform keys:  `https://github.com/ARM-software/psa-crypto-api/issues/550` (private)
 
 
 --------------
 
-*Copyright (c) 2018-2023, Arm Limited. All rights reserved.*
+*SPDX-License-Identifier: BSD-3-Clause*
+
+*SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors*

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Arm Limited. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  * Copyright (c) 2021-2022 Nordic Semiconductor ASA
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -11,7 +11,7 @@
 #include <tfm_ioctl_core_api.h>
 #include <string.h>
 #include <arm_cmse.h>
-#include <array.h>
+#include <tfm_utils.h>
 #include <tfm_hal_isolation.h>
 
 /* This contains the user provided allowed ranges */
@@ -20,6 +20,20 @@
 #include <hal/nrf_gpio.h>
 #ifdef NRF91_SERIES
 #include <nrfx_nvmc.h>
+#endif
+
+#if SOC_NRF7120_TFM_MRAMC_SERVICE
+#include <nrfx_mramc.h>
+#endif
+
+#if TFM_NRF_RAM_CTRL_SERVICE
+#include <helpers/nrfx_ram_ctrl.h>
+#include <hal/nrf_memconf.h>
+#include "region_defs.h"
+#endif
+
+#if CONFIG_NRF_WIFI_KMU
+#include <wifi_kmu/wifi_kmu.h>
 #endif
 
 #include "handle_attr.h"
@@ -103,7 +117,7 @@ tfm_platform_hal_read_service(const psa_invec  *in_vec,
 static bool valid_mcu_select(uint32_t mcu)
 {
 	switch (mcu) {
-#if defined(NRF54L_SERIES)
+#if defined(NRF54L_SERIES) || defined(NRF71_SERIES)
 	case NRF_GPIO_PIN_SEL_GPIO:
 	case NRF_GPIO_PIN_SEL_VPR:
 	case NRF_GPIO_PIN_SEL_GRTC:
@@ -232,3 +246,158 @@ enum tfm_platform_err_t tfm_platform_hal_write32_service(const psa_invec *in_vec
 
 	return err;
 }
+
+#if SOC_NRF7120_TFM_MRAMC_SERVICE
+enum tfm_platform_err_t tfm_platform_hal_mramc_init_service(void)
+{
+	nrfx_mramc_config_t config = NRFX_MRAMC_DEFAULT_CONFIG();
+	int ret = nrfx_mramc_init(&config, NULL);
+
+	if (ret == -EALREADY) {
+		/* Driver is initialise by ITS or PS at the ealier stage*/
+		return TFM_PLATFORM_ERR_SUCCESS;
+	} else if (ret != 0) {
+		return TFM_PLATFORM_ERR_SYSTEM_ERROR;
+	}
+
+	return TFM_PLATFORM_ERR_SUCCESS;
+}
+
+enum tfm_platform_err_t tfm_platform_hal_mramc_set_wen_service(const psa_invec *in_vec)
+{
+	struct tfm_mramc_set_wen_service_args_t *args;
+
+	if (in_vec->len != sizeof(struct tfm_mramc_set_wen_service_args_t)) {
+		return TFM_PLATFORM_ERR_INVALID_PARAM;
+	}
+
+	args = (struct tfm_mramc_set_wen_service_args_t *)in_vec->base;
+	uint32_t write_mode = args->write_mode;
+
+	while(!nrfx_mramc_ready_check()) {
+	/* Wait until MRAMC is ready for the next operation */
+	}
+	nrfx_mramc_config_write_mode_set(write_mode);
+
+	return TFM_PLATFORM_ERR_SUCCESS;
+}
+#endif /* SOC_NRF7120_TFM_MRAMC_SERVICE */
+
+#if TFM_NRF_RAM_CTRL_SERVICE
+
+/* RAM section granularity (32 KiB on nRF54L / nRF7120). */
+#define RAM_CTRL_SECTION_SIZE 0x8000U
+
+/* Align a RAM address down/up to the section granularity (power-of-two size). */
+#define RAM_CTRL_SECTION_DOWN(x) ((x) & ~(RAM_CTRL_SECTION_SIZE - 1U))
+#define RAM_CTRL_SECTION_UP(x)   RAM_CTRL_SECTION_DOWN((x) + (RAM_CTRL_SECTION_SIZE - 1U))
+
+/* True if [addr, addr+len) lies entirely within the non-secure RAM window. */
+static bool ram_ctrl_range_is_ns(uint32_t addr, uint32_t len)
+{
+	if (len == 0U || addr > (UINT32_MAX - len)) {
+		return false;
+	}
+
+	return (addr >= NS_DATA_START) && ((addr + len - 1U) <= NS_DATA_LIMIT);
+}
+
+enum tfm_platform_err_t
+tfm_platform_hal_ram_ctrl_service(const psa_invec *in_vec, const psa_outvec *out_vec)
+{
+	struct tfm_ram_ctrl_service_args_t *args;
+	struct tfm_ram_ctrl_service_out_t *out;
+
+	if (in_vec->len != sizeof(struct tfm_ram_ctrl_service_args_t) ||
+	    out_vec->len != sizeof(struct tfm_ram_ctrl_service_out_t)) {
+		return TFM_PLATFORM_ERR_INVALID_PARAM;
+	}
+
+	args = (struct tfm_ram_ctrl_service_args_t *)in_vec->base;
+	out = (struct tfm_ram_ctrl_service_out_t *)out_vec->base;
+	out->result = -1;
+	out->control = 0;
+	out->ret = 0;
+	out->ret2 = 0;
+
+	/* Read back MEMCONF registers. */
+	if (args->op == TFM_RAM_CTRL_OP_READ_STATUS) {
+		out->control = NRF_MEMCONF->POWER[0].CONTROL;
+		out->ret = NRF_MEMCONF->POWER[0].RET;
+		out->ret2 = NRF_MEMCONF->POWER[0].RET2;
+		out->result = 0;
+		return TFM_PLATFORM_ERR_SUCCESS;
+	}
+
+	/* Allow-list: reject anything not entirely within non-secure RAM. */
+	if (!ram_ctrl_range_is_ns(args->addr, args->len)) {
+		return TFM_PLATFORM_ERR_INVALID_PARAM;
+	}
+
+	switch (args->op) {
+	case TFM_RAM_CTRL_OP_POWER: {
+		/* Act only on whole 32 KiB sections fully inside the non-secure window. */
+		uint32_t start = RAM_CTRL_SECTION_UP(args->addr);
+		uint32_t end = RAM_CTRL_SECTION_DOWN(args->addr + args->len);
+		uint32_t ns_hi = RAM_CTRL_SECTION_DOWN((uint32_t)NS_DATA_LIMIT + 1U);
+
+		if (end > ns_hi) {
+			end = ns_hi;
+		}
+		if (start < end) {
+			nrfx_ram_ctrl_power_enable_set((void *)(uintptr_t)start,
+						       end - start, args->on != 0U);
+		}
+		break;
+	}
+	case TFM_RAM_CTRL_OP_RETAIN: {
+		/* RET is controlled per 32 KiB section. Reject requests whose
+		 * containing sections overlap memory outside the non-secure window
+		 * instead of silently applying only part of the requested range.
+		 */
+		uint32_t start = RAM_CTRL_SECTION_DOWN(args->addr);
+		uint32_t end = RAM_CTRL_SECTION_UP(args->addr + args->len);
+		uint32_t ns_lo = RAM_CTRL_SECTION_UP((uint32_t)NS_DATA_START);
+		uint32_t ns_hi = RAM_CTRL_SECTION_DOWN((uint32_t)NS_DATA_LIMIT + 1U);
+
+		if (start < ns_lo || end > ns_hi || start >= end) {
+			return TFM_PLATFORM_ERR_INVALID_PARAM;
+		}
+
+		nrfx_ram_ctrl_retention_enable_set((void *)(uintptr_t)start,
+					       end - start, args->on != 0U);
+		break;
+	}
+	default:
+		return TFM_PLATFORM_ERR_INVALID_PARAM;
+	}
+
+	out->result = 0;
+	return TFM_PLATFORM_ERR_SUCCESS;
+}
+#endif /* TFM_NRF_RAM_CTRL_SERVICE */
+
+#if CONFIG_NRF_WIFI_KMU
+enum tfm_platform_err_t tfm_platform_hal_wifi_kmu_write_key_service(const psa_invec *in_vec)
+{
+	struct tfm_wifi_kmu_write_key_service_args_t *args;
+	int err;
+
+	if (in_vec->len != sizeof *args) {
+		return TFM_PLATFORM_ERR_INVALID_PARAM;
+	}
+
+	args = (struct tfm_wifi_kmu_write_key_service_args_t *)in_vec->base;
+	err = wifi_kmu_write_key(args->slot_id, args->target_addr, args->key_buffer,
+				 args->key_size);
+
+	return err ? TFM_PLATFORM_ERR_SYSTEM_ERROR : TFM_PLATFORM_ERR_SUCCESS;
+}
+
+enum tfm_platform_err_t tfm_platform_hal_wifi_kmu_erase_keys_service(void)
+{
+	int err = wifi_kmu_erase_keys();
+
+	return err ? TFM_PLATFORM_ERR_SYSTEM_ERROR : TFM_PLATFORM_ERR_SUCCESS;
+}
+#endif /* CONFIG_NRF_WIFI_KMU */

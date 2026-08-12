@@ -7,17 +7,19 @@
 #
 #-------------------------------------------------------------------------------
 
+include(utils)
+
 set (VALID_ISOLATION_LEVELS 1 2 3)
 
 tfm_invalid_config(NOT TFM_ISOLATION_LEVEL IN_LIST VALID_ISOLATION_LEVELS)
 tfm_invalid_config(TFM_ISOLATION_LEVEL EQUAL 3 AND NOT PLATFORM_HAS_ISOLATION_L3_SUPPORT)
-tfm_invalid_config(TFM_ISOLATION_LEVEL GREATER 1 AND PSA_FRAMEWORK_HAS_MM_IOVEC)
 
 tfm_invalid_config(TFM_MULTI_CORE_TOPOLOGY AND TFM_NS_MANAGE_NSID)
 tfm_invalid_config(TFM_PLAT_SPECIFIC_MULTI_CORE_COMM AND NOT TFM_MULTI_CORE_TOPOLOGY)
 tfm_invalid_config(TFM_HYBRID_PLATFORM_API_BROKER AND NOT TFM_MULTI_CORE_TOPOLOGY)
 
 tfm_invalid_config(TFM_ISOLATION_LEVEL EQUAL 3 AND CONFIG_TFM_STACK_WATERMARKS)
+tfm_invalid_config(CONFIG_TFM_INCLUDE_STDLIBC AND CMAKE_C_COMPILER_ID STREQUAL Clang)
 
 ########################## BL1 #################################################
 
@@ -35,8 +37,6 @@ tfm_invalid_config(BL2 AND (NOT MCUBOOT_UPGRADE_STRATEGY STREQUAL "DIRECT_XIP" A
 # Maximum number of MCUBoot images supported by TF-M NV counters and ROTPKs
 tfm_invalid_config(MCUBOOT_IMAGE_NUMBER GREATER 9)
 
-tfm_invalid_config(MCUBOOT_SIGNATURE_TYPE STREQUAL "EC-P256" AND NOT MCUBOOT_USE_PSA_CRYPTO)
-tfm_invalid_config(MCUBOOT_SIGNATURE_TYPE STREQUAL "EC-P384" AND NOT MCUBOOT_USE_PSA_CRYPTO)
 tfm_invalid_config(MCUBOOT_SIGNATURE_TYPE STREQUAL "RSA-2048" AND MCUBOOT_BUILTIN_KEY)
 tfm_invalid_config(MCUBOOT_SIGNATURE_TYPE STREQUAL "RSA-3072" AND MCUBOOT_BUILTIN_KEY)
 
@@ -95,6 +95,17 @@ tfm_invalid_config(TFM_PROFILE STREQUAL "profile_small" AND CONFIG_TFM_SPM_BACKE
 
 tfm_invalid_config(TFM_PXN_ENABLE AND NOT TFM_SYSTEM_ARCHITECTURE STREQUAL "armv8.1-m.main")
 
+# TFM_TZ_REENTRANCY_CHECK is only supported for v8-m
+tfm_invalid_config(TFM_TZ_REENTRANCY_CHECK AND NOT
+    (TFM_SYSTEM_ARCHITECTURE STREQUAL "armv8.1-m.main" OR
+    TFM_SYSTEM_ARCHITECTURE STREQUAL "armv8-m.base" OR
+    TFM_SYSTEM_ARCHITECTURE STREQUAL "armv8-m.main"))
+
+# TFM_TZ_REENTRANCY_CHECK is compatible only when both TrustZone and
+# Multicore are selected
+tfm_invalid_config(TFM_TZ_REENTRANCY_CHECK AND NOT
+    (CONFIG_TFM_USE_TRUSTZONE AND TFM_MULTI_CORE_TOPOLOGY))
+
 ######################## Sanitization checks ###################################
 
 tfm_invalid_config(BL1_1_SANITIZE AND C_COMPILER_ID:IAR)
@@ -117,6 +128,20 @@ tfm_invalid_config(TFM_SANITIZE AND NOT TFM_SANITIZE IN_LIST TFM_SANITIZER_ALLOW
 ###################### Compiler check for FP support ###########################
 
 include(config/cp_check.cmake)
+
+###################### Compiler bugs ###########################################
+
+if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    execute_process(
+        COMMAND ${CMAKE_C_COMPILER} --version
+        OUTPUT_VARIABLE _COMPILER_VERSION
+    )
+
+    get_filename_component(COMPILER_BASENAME ${CMAKE_C_COMPILER} NAME_WE)
+    string(REGEX MATCH "${COMPILER_BASENAME}[^\n]*" GCC_VERSION_DETAILED ${_COMPILER_VERSION})
+
+    tfm_invalid_config(GCC_VERSION_DETAILED STREQUAL "arm-none-eabi-gcc (15:13.2.rel1-2) 13.2.1 20231009")
+endif()
 
 ###################### Platform-specific checks ################################
 

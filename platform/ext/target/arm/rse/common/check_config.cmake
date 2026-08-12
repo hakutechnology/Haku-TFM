@@ -31,12 +31,20 @@ tfm_invalid_config(MEASURED_BOOT_HASH_ALG STREQUAL SHA384 AND NOT MCUBOOT_SIGNAT
 
 # Provisioning features which require the provisioning comms to receive messages
 tfm_invalid_config((RSE_DM_CHAINED_PROVISIONING OR TFM_PARTITION_RUNTIME_PROVISIONING
-                    OR RSE_NON_ENDORSED_DM_PROVISIONING)
+                    OR RSE_ENDORSEMENT_CERTIFICATE_PROVISIONING)
                     AND NOT RSE_ENABLE_DCSU_PROVISIONING_COMMS)
 
 # Provisioning features which require asymmetric signature verification
-tfm_invalid_config((RSE_NON_ENDORSED_DM_PROVISIONING OR RSE_DM_CHAINED_PROVISIONING)
+tfm_invalid_config((RSE_NON_ENDORSED_DM_PROVISIONING OR RSE_ENDORSEMENT_CERTIFICATE_PROVISIONING
+                    OR RSE_DM_CHAINED_PROVISIONING)
                     AND RSE_SYMMETRIC_PROVISIONING)
+
+# In case of XIP the copy regions are read only and cannot be reused as stack
+tfm_invalid_config(CONFIG_TFM_REUSE_COPY_AREA_FOR_SP_STACKS AND RSE_XIP)
+
+# Image binding requires RAM loading
+tfm_invalid_config(MCUBOOT_IMAGE_BINDING AND NOT CONFIG_BOOT_RAM_LOAD)
+
 ########################## Attestation #########################################
 
 get_property(TFM_ATTESTATION_SCHEME_LIST CACHE TFM_ATTESTATION_SCHEME PROPERTY STRINGS)
@@ -46,3 +54,15 @@ tfm_invalid_config(NOT TFM_ATTESTATION_SCHEME IN_LIST TFM_ATTESTATION_SCHEME_LIS
 
 # The SCMI comms tests use the same timer interrupt as the IRQ tests
 tfm_invalid_config(TEST_S_SCMI_COMMS AND (TEST_NS_SLIH_IRQ OR TEST_NS_FLIH_IRQ))
+
+# Test TP mode must be either TCI or PCI
+tfm_invalid_config(DEFINED RSE_TESTS_TP_MODE AND NOT (RSE_TESTS_TP_MODE STREQUAL "TCI"
+                                                    OR RSE_TESTS_TP_MODE STREQUAL "PCI"))
+
+########################## RSE Image Verification ##############################
+
+tfm_invalid_config(TFM_PARTITION_RSE_IMAGE_VERIFICATION AND NOT PSA_FRAMEWORK_HAS_MM_IOVEC)
+
+########################## Encrypted images in BL2 #############################
+
+tfm_invalid_config(MCUBOOT_ENC_IMAGES AND NOT (MCUBOOT_UPGRADE_STRATEGY STREQUAL "RAM_LOAD"))

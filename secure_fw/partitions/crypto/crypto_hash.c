@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, Arm Limited. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -9,11 +9,13 @@
 #include <stdint.h>
 
 #include "config_tfm.h"
+#include "coverity_check.h"
 #include "tfm_mbedcrypto_include.h"
 
 #include "tfm_crypto_api.h"
 #include "tfm_crypto_defs.h"
 
+TFM_COVERITY_DEVIATE_BLOCK(MISRA_C_2023_Rule_11_5, "It's PSA API design to use pointer to void")
 /*!
  * \addtogroup tfm_crypto_api_shim_layer
  *
@@ -21,6 +23,68 @@
 
 /*!@{*/
 #if CRYPTO_HASH_MODULE_ENABLED
+/**
+ * \brief Check whether PSA is capable of handling the specified hash algorithm.
+ *
+ * \note  As service initialization is performed during TF-M boot up, so there is no need
+ *        to check whether psa_crypto_init has already been called.
+ *
+ * \param[in] alg The hash algorithm.
+ *
+ * \return 1 if the PSA can handle \p alg, 0 otherwise.
+ */
+static int tfm_crypto_can_do_hash(psa_algorithm_t alg)
+{
+    switch (alg) {
+#if defined(PSA_WANT_ALG_MD5)
+    case PSA_ALG_MD5:
+        return 1;
+#endif
+#if defined(PSA_WANT_ALG_RIPEMD160)
+    case PSA_ALG_RIPEMD160:
+        return 1;
+#endif
+#if defined(PSA_WANT_ALG_SHA_1)
+    case PSA_ALG_SHA_1:
+        return 1;
+#endif
+#if defined(PSA_WANT_ALG_SHA_224)
+    case PSA_ALG_SHA_224:
+        return 1;
+#endif
+#if defined(PSA_WANT_ALG_SHA_256)
+    case PSA_ALG_SHA_256:
+        return 1;
+#endif
+#if defined(PSA_WANT_ALG_SHA_384)
+    case PSA_ALG_SHA_384:
+        return 1;
+#endif
+#if defined(PSA_WANT_ALG_SHA_512)
+    case PSA_ALG_SHA_512:
+        return 1;
+#endif
+#if defined(PSA_WANT_ALG_SHA3_224)
+    case PSA_ALG_SHA3_224:
+        return 1;
+#endif
+#if defined(PSA_WANT_ALG_SHA3_256)
+    case PSA_ALG_SHA3_256:
+        return 1;
+#endif
+#if defined(PSA_WANT_ALG_SHA3_384)
+    case PSA_ALG_SHA3_384:
+        return 1;
+#endif
+#if defined(PSA_WANT_ALG_SHA3_512)
+    case PSA_ALG_SHA3_512:
+        return 1;
+#endif
+    default:
+        return 0;
+    }
+}
+
 psa_status_t tfm_crypto_hash_interface(psa_invec in_vec[],
                                        psa_outvec out_vec[])
 {
@@ -29,6 +93,17 @@ psa_status_t tfm_crypto_hash_interface(psa_invec in_vec[],
     psa_hash_operation_t *operation = NULL;
     uint32_t *p_handle = NULL;
     enum tfm_crypto_func_sid_t sid = (enum tfm_crypto_func_sid_t)iov->function_id;
+
+    if (sid == TFM_CRYPTO_CAN_DO_HASH_SID)
+    {
+        int *p_result = out_vec[0].base;
+        if ((out_vec[0].base == NULL) || (out_vec[0].len < sizeof(int))) {
+            return PSA_ERROR_PROGRAMMER_ERROR;
+        }
+
+        *p_result = tfm_crypto_can_do_hash(iov->alg);
+        return PSA_SUCCESS;
+    }
 
     if (sid == TFM_CRYPTO_HASH_COMPUTE_SID) {
 #if CRYPTO_SINGLE_PART_FUNCS_DISABLED
@@ -197,3 +272,4 @@ psa_status_t tfm_crypto_hash_interface(psa_invec in_vec[],
 }
 #endif /* CRYPTO_HASH_MODULE_ENABLED */
 /*!@}*/
+TFM_COVERITY_BLOCK_END(MISRA_C_2023_Rule_11_5)

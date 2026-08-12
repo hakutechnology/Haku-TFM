@@ -1,9 +1,12 @@
 #-------------------------------------------------------------------------------
-# Copyright (c) 2023-2024, Arm Limited. All rights reserved.
+# SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
 #-------------------------------------------------------------------------------
+
+common: !include dma_common.yaml
+
 locations:
     rom:
         base_address: 0x1101F000
@@ -13,10 +16,14 @@ locations:
         size: 0x10000
         reserved: 0x8
     otp:
-        # This has to be manually calculated, and must be updated if the OTP
-        # layout changes
-        base_address: 0x500A4C00
-        size: 0x400
+        # The OTP is mapped at offset 0x1000 from the start of the LCM, which
+        # would be 0x500A0000 + 0x1000 = 0x500A1000. The structure of the OTP
+        # then depends on the integration layer options and the integration-specific
+        # OTP layout that is represented by the type __PACKED_STRUCT rse_otp_header_area_t.
+        # The base_address below is therefore computed conceptually as:
+        #     0x500A1000 + offsetof(__PACKED_STRUCT rse_otp_header_area_t, dma_ics)
+        base_address: 0x500A1170
+        size: 0x108
         reserved: 0x8
     integrity_checker:
         base_address: 0x5015C000
@@ -24,6 +31,14 @@ locations:
         base_address: 0x5009F000
     dma350:
         base_address: 0x50002000
+    dma_channel_0:
+        base_address: 0x50003000
+    dma_channel_1:
+        base_address: 0x50003100
+    dma_channel_2:
+        base_address: 0x50003200
+    dma_channel_3:
+        base_address: 0x50003300
     dtcm:
         base_address: 0x34000000
     lcm:
@@ -36,6 +51,14 @@ locations:
         base_address: 0x5015D000
     kmu:
         base_address: 0x5009E000
+
+triggers:
+     diagnostic_mode: 0
+     mission_mode: 1
+     mission_provisioning: 2
+     secure_enable: 3
+     sam_integrity_checker: 4
+     integrity_checker: 5
 
 program:
   - storage_location: "rom"
@@ -76,7 +99,6 @@ program:
     commands:
       - !include include/program3_cmd0.yaml         # Program 3 - Command 0
       - !include include/program3_cmd1.yaml         # Program 3 - Command 1
-      - !include include/program3_cmd2.yaml         # Program 3 - Command 2
 
   - storage_location: "rom"
     execution_location: "rom"
@@ -103,14 +125,7 @@ program:
   - storage_location: "rom"
     execution_location: "rom"
     name: "program6"
-    description: "Release DCU lock, enable and zeroize TRAM, and release CPUWAIT"
+    description: "Release DCU lock and CPUWAIT"
     commands:
       - !include include/program6_cmd0.yaml         # Program 6 - Command 0
       - !include include/program6_cmd1.yaml         # Program 6 - Command 1
-      - !include include/program6_cmd2.yaml         # Program 6 - Command 2
-      - !include include/program6_cmd3.yaml         # Program 6 - Command 3
-      - !include include/program6_cmd4.yaml         # Program 6 - Command 4
-      - !include include/program6_cmd5.yaml         # Program 6 - Command 5
-      - !include include/program6_cmd6.yaml         # Program 6 - Command 6
-      - !include include/program6_cmd7.yaml         # Program 6 - Command 7
-      - !include include/program6_cmd8.yaml         # Program 6 - Command 8

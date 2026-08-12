@@ -49,6 +49,31 @@ install(FILES       ${CMAKE_CURRENT_BINARY_DIR}/config/message_config.pickle
 install(FILES       ${CMAKE_CURRENT_BINARY_DIR}/config/provisioning_config.pickle
         DESTINATION ${INSTALL_PLATFORM_NS_DIR}/provisioning/config)
 
+# Helper functions to convert numbers to the memory layout expected by the OTP map
+function(_byte_to_hex2 BYTE OUT_VAR)
+    # BYTE must be 0..255
+    set(_hex "0123456789ABCDEF")
+    math(EXPR _hi "(${BYTE} >> 4) & 0xF")
+    math(EXPR _lo "(${BYTE}) & 0xF")
+    string(SUBSTRING "${_hex}" ${_hi} 1 _h)
+    string(SUBSTRING "${_hex}" ${_lo} 1 _l)
+    set(${OUT_VAR} "${_h}${_l}" PARENT_SCOPE)
+endfunction()
+
+function(u32_to_hex_bytes_le VALUE OUT_VAR)
+    math(EXPR B0 "(${VALUE} >> 24) & 0xFF")
+    math(EXPR B1 "(${VALUE} >> 16) & 0xFF")
+    math(EXPR B2 "(${VALUE} >> 8)  & 0xFF")
+    math(EXPR B3 "(${VALUE})       & 0xFF")
+
+    _byte_to_hex2(${B3} H0)
+    _byte_to_hex2(${B2} H1)
+    _byte_to_hex2(${B1} H2)
+    _byte_to_hex2(${B0} H3)
+
+    set(${OUT_VAR} "${H0}${H1}${H2}${H3}" PARENT_SCOPE)
+endfunction()
+
 function(create_provisioning_code_target target linker_script entry_point
         sources defs)
     set(TARGET_NAME ${target}_provisioning_code)
@@ -63,14 +88,14 @@ function(create_provisioning_code_target target linker_script entry_point
 
     target_link_options(${TARGET_NAME}
         PRIVATE
-        $<$<C_COMPILER_ID:GNU>:-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bin/${target}_provisioning_code.map>
+        $<$<C_COMPILER_ID:GNU,Clang>:-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bin/${target}_provisioning_code.map>
             $<$<C_COMPILER_ID:ARMClang>:--map>
             $<$<C_COMPILER_ID:IAR>:--map\;${CMAKE_CURRENT_BINARY_DIR}/bin/${target}_provisioning_code.map>
     )
 
     target_sources(${TARGET_NAME}
         PRIVATE
-            $<$<BOOL:${CONFIG_GNU_SYSCALL_STUB_ENABLED}>:${CMAKE_SOURCE_DIR}/platform/ext/common/syscalls_stub.c>
+            $<$<C_COMPILER_ID:GNU>:${CMAKE_SOURCE_DIR}/platform/ext/common/syscalls_stub.c>
     )
 
     target_include_directories(${TARGET_NAME}
@@ -97,7 +122,7 @@ function(create_provisioning_code_target target linker_script entry_point
 
     target_add_scatter_file(${TARGET_NAME}
         $<$<C_COMPILER_ID:ARMClang>:${CMAKE_CURRENT_SOURCE_DIR}/${linker_script}.sct>
-        $<$<C_COMPILER_ID:GNU>:${CMAKE_CURRENT_SOURCE_DIR}/${linker_script}.ld>
+        $<$<C_COMPILER_ID:GNU,Clang>:${CMAKE_CURRENT_SOURCE_DIR}/${linker_script}.ld>
     )
 
     target_link_options(${TARGET_NAME}
@@ -118,11 +143,11 @@ endfunction()
 
 function(generate_provisioning_bundle bundle_type script exe_target blob_version valid_lcses
          symmetric_provisioning signature_config sign_key encrypt_key non_rom_pk_config sign_key_cm_rotpk
-         encrypt_code_data encrypt_secret_values
+         encrypt_code_data encrypt_secret_values sp_mode_required
          additional_bundle_args additional_bundle_deps)
     set(GENERATED_FILE_NAME ${CMAKE_BINARY_DIR}/bin/provisioning/${bundle_type}_message.bin)
     set(ELF_FILE_NAME ${CMAKE_CURRENT_BINARY_DIR}/bin/${exe_target}.axf)
-    list(TRANSFORM valid_lcses PREPEND "--valid_lcs=RSE_PROVISIONING_BLOB_VALID_IN_")
+    list(TRANSFORM valid_lcses PREPEND "--valid_lcs=RSE_PROVISIONING_AUTH_MSG_VALID_IN_")
     list(TRANSFORM valid_lcses APPEND "_LCS")
 
     set(CUSTOM_COMMAND_DEPENDENCIES
@@ -139,9 +164,9 @@ function(generate_provisioning_bundle bundle_type script exe_target blob_version
         --provisioning_message_config=${CMAKE_CURRENT_BINARY_DIR}/config/message_config.pickle
         --provisioning_code_elf=${ELF_FILE_NAME}
         --bundle_output_file ${GENERATED_FILE_NAME}
-        --tp_mode=RSE_PROVISIONING_BLOB_REQUIRES_TP_MODE_${RSE_TP_MODE}
+        --tp_mode=RSE_PROVISIONING_AUTH_MSG_REQUIRES_TP_MODE_${RSE_TP_MODE}
         --version=${blob_version}
-        --signature_config=RSE_PROVISIONING_BLOB_SIGNATURE_${signature_config}
+        --signature_config=RSE_PROVISIONING_AUTH_MSG_SIGNATURE_${signature_config}
         ${valid_lcses}
     )
 
@@ -163,7 +188,7 @@ function(generate_provisioning_bundle bundle_type script exe_target blob_version
     if (${signature_config} STREQUAL "ROTPK_NOT_IN_ROM")
         set(CREATE_BUNDLE_SCRIPT_ARGS
             ${CREATE_BUNDLE_SCRIPT_ARGS}
-            --non_rom_pk_config=RSE_PROVISIONING_BLOB_DETAILS_NON_ROM_PK_TYPE_${non_rom_pk_config}
+            --non_rom_pk_config=RSE_PROVISIONING_AUTH_MSG_DETAILS_NON_ROM_PK_TYPE_${non_rom_pk_config}
         )
         if (${non_rom_pk_config} STREQUAL "CM_ROTPK")
             set(CREATE_BUNDLE_SCRIPT_ARGS
@@ -199,16 +224,27 @@ function(generate_provisioning_bundle bundle_type script exe_target blob_version
     if (${encrypt_secret_values})
         set(SECRET_VALUES_ENCRYPT_ARG AES)
     else()
-        set(SECRET_VALUES_ENCRYPT_ARG BY_BLOB)
+        set(SECRET_VALUES_ENCRYPT_ARG BY_MESSAGE)
     endif()
 
     set(CREATE_BUNDLE_SCRIPT_ARGS
         ${CREATE_BUNDLE_SCRIPT_ARGS}
-        --encrypt_code_and_data=RSE_PROVISIONING_BLOB_CODE_DATA_DECRYPTION_${CODE_DATA_ENCRYPT_ARG}
-        --encrypt_secret_values=RSE_PROVISIONING_BLOB_SECRET_VALUES_DECRYPTION_${SECRET_VALUES_ENCRYPT_ARG}
-        --sp_mode RSE_PROVISIONING_BLOB_REQUIRES_SP_MODE_ENABLED
+        --encrypt_code_and_data=RSE_PROVISIONING_AUTH_MSG_CODE_DATA_DECRYPTION_${CODE_DATA_ENCRYPT_ARG}
+        --encrypt_secret_values=RSE_PROVISIONING_AUTH_MSG_SECRET_VALUES_DECRYPTION_${SECRET_VALUES_ENCRYPT_ARG}
         ${additional_bundle_args}
     )
+
+    if (sp_mode_required)
+        set(CREATE_BUNDLE_SCRIPT_ARGS
+            ${CREATE_BUNDLE_SCRIPT_ARGS}
+            --sp_mode RSE_PROVISIONING_AUTH_MSG_REQUIRES_SP_MODE_ENABLED
+        )
+    else()
+        set(CREATE_BUNDLE_SCRIPT_ARGS
+            ${CREATE_BUNDLE_SCRIPT_ARGS}
+            --sp_mode RSE_PROVISIONING_AUTH_MSG_REQUIRES_SP_MODE_DISABLED
+        )
+    endif()
 
     add_custom_target(${bundle_type}_message
         ALL
@@ -222,7 +258,6 @@ function(generate_provisioning_bundle bundle_type script exe_target blob_version
             ${CREATE_BUNDLE_SCRIPT_ARGS}
     )
 endfunction()
-
 
 create_provisioning_code_target(cm
     provisioning_code # cmake target
@@ -245,11 +280,20 @@ create_provisioning_code_target(combined
     "RSE_COMBINED_PROVISIONING_BUNDLES" # additional macros
 )
 
-if (RSE_NON_ENDORSED_DM_PROVISIONING)
+if (RSE_NON_ENDORSED_DM_PROVISIONING OR RSE_ENDORSEMENT_CERTIFICATE_PROVISIONING)
+    set(PLAIN_DATA_HANDLER_SOURCES
+            ./plain_data_handler_provisioning_code.c
+            ./../rse_provisioning_plain_data_handler.c
+            ./../../rse_rotpk_revocation.c
+            ./../../rse_asn1_encoding.c
+            ${CMAKE_SOURCE_DIR}/secure_fw/shared/crt_memset.c
+            ${CMAKE_SOURCE_DIR}/secure_fw/shared/crt_memcpy.c
+        )
+
     create_provisioning_code_target(plain_data_handler
         provisioning_code # cmake target
         do_provision # entrypoint
-        "./plain_data_handler_provisioning_code.c;./../rse_provisioning_plain_data_handler.c;./../../rse_rotpk_revocation.c" # sources
+        "${PLAIN_DATA_HANDLER_SOURCES}" # sources
         "" # additional macros
     )
 endif()
@@ -270,15 +314,18 @@ if (TFM_DUMMY_PROVISIONING)
     STRING(REGEX REPLACE "-.*$" "" MCUBOOT_ROTPK_TYPE ${MCUBOOT_SIGNATURE_TYPE})
     STRING(REGEX REPLACE "EC" "ECDSA" MCUBOOT_ROTPK_TYPE ${MCUBOOT_ROTPK_TYPE})
 
+    math(EXPR RSE_OTP_CM_POLICIES "${RSE_OTP_CM_POLICIES_FEATURE_CONTROL_BITS} << 8")
+    if(RSE_NON_ENDORSED_DM_PROVISIONING)
+        math(EXPR RSE_OTP_CM_POLICIES "${RSE_OTP_CM_POLICIES} | 1 << 4")
+    endif()
+
     set(CM_BUNDLE_SCRIPT_ARGS
         --non_secret_cm:bl1_2.bl1_2=${CMAKE_BINARY_DIR}/bin/bl1_2_padded.bin
         --non_secret_cm:bl1_2.bl1_2_hash=${CMAKE_BINARY_DIR}/bin/bl1_2_padded_hash.bin
         --secret_cm:guk=${TFM_GUK_PATH}
         --non_secret_cm:otp_dma_ics=${CMAKE_BINARY_DIR}/bin/otp_dma_ics.bin
-        $<$<BOOL:${TFM_BL1_2_IMAGE_ENCRYPTION}>:--secret_cm:kce_cm=${TFM_BL2_ENCRYPTION_KEY_PATH}>
-
-        # Set config flags to 1 << 0x4
-        $<$<BOOL:${RSE_NON_ENDORSED_DM_PROVISIONING}>:--non_secret_cm:cm.config_flags=16>
+        --secret_cm:kce_cm=${TFM_GUK_PATH}
+        --non_secret_cm:cm.cm_policies=${RSE_OTP_CM_POLICIES}
 
         --non_secret_cm:cm.rotpk_areas_0.rotpk_0=${TFM_BL1_2_CM_SIGNING_KEY_PATH}
         --non_secret_cm:cm.rotpk_areas_0.rotpk_policy_0 RSE_ROTPK_POLICY_SIG_REQUIRED
@@ -291,7 +338,8 @@ if (TFM_DUMMY_PROVISIONING)
         --non_secret_cm:cm.rotpk_areas_0.rotpk_hash_alg_1 RSE_ROTPK_HASH_ALG_${MCUBOOT_ROTPK_HASH_ALG}
     )
 
-    if (${RSE_PROVISIONING_DM_SIGNATURE_CONFIG} STREQUAL "ROTPK_NOT_IN_ROM" OR RSE_NON_ENDORSED_DM_PROVISIONING)
+    if (${RSE_PROVISIONING_DM_SIGNATURE_CONFIG} STREQUAL "ROTPK_NOT_IN_ROM"
+        OR RSE_NON_ENDORSED_DM_PROVISIONING OR RSE_ENDORSEMENT_CERTIFICATE_PROVISIONING)
         set(CM_BUNDLE_SCRIPT_ARGS
             ${CM_BUNDLE_SCRIPT_ARGS}
             --non_secret_cm:cm.rotpk_areas_0.rotpk_${RSE_PROVISIONING_DM_SIGN_KEY_CM_ROTPK_IDX}=${RSE_CM_PROVISIONING_SIGNING_KEY}
@@ -324,13 +372,13 @@ if (TFM_DUMMY_PROVISIONING)
         --non_secret_dm:dm.rotpk_areas_0.rotpk_policy_1 RSE_ROTPK_POLICY_SIG_REQUIRED
         --non_secret_dm:dm.rotpk_areas_0.rotpk_type_1 RSE_ROTPK_TYPE_${MCUBOOT_ROTPK_TYPE}
         --non_secret_dm:dm.rotpk_areas_0.rotpk_hash_alg_1 RSE_ROTPK_HASH_ALG_${MCUBOOT_ROTPK_HASH_ALG}
-
+        --secret_dm:kce_dm=${TFM_GUK_PATH}
         $<$<BOOL:${RSE_OTP_HAS_ROUTING_TABLES}>:--routing_tables=${CMAKE_CURRENT_BINARY_DIR}/../../config/routing_tables.pickle>
     )
 
     if (RSE_DM_CHAINED_PROVISIONING)
         set(MAIN_DM_BUNDLE_SIGNATURE_CONFIG ROTPK_NOT_IN_ROM)
-        set(MAIN_DM_BUNDLE_NOT_IN_ROM_SIGNATURE_CONFIG PREVIOUS_BLOB)
+        set(MAIN_DM_BUNDLE_NOT_IN_ROM_SIGNATURE_CONFIG PREVIOUS_MESSAGE)
     else()
         set(MAIN_DM_BUNDLE_SIGNATURE_CONFIG ${RSE_PROVISIONING_DM_SIGNATURE_CONFIG})
         if (MAIN_DM_BUNDLE_SIGNATURE_CONFIG STREQUAL "ROTPK_NOT_IN_ROM")
@@ -352,10 +400,52 @@ if (TFM_DUMMY_PROVISIONING)
         else()
             set(BUNDLE_SUFFIX "")
         endif()
+
+        # Extract TRNG config
+        if(RSE_PROVISION_TRNG_CONFIG)
+            list(LENGTH RSE_TRNG_CONFIG _len)
+            if(NOT _len EQUAL 5)
+                message(FATAL_ERROR
+                    "RSE_TRNG_CONFIG must contain exactly 5 integers "
+                    "(trng_in_use + 4 subsample counts), got ${_len}"
+                )
+            endif()
+            list(GET RSE_TRNG_CONFIG 0 RSE_TRNG_ROSC_IN_USE)
+            list(GET RSE_TRNG_CONFIG 1 RSE_TRNG_SUBSAMPLE_COUNT_0)
+            list(GET RSE_TRNG_CONFIG 2 RSE_TRNG_SUBSAMPLE_COUNT_1)
+            list(GET RSE_TRNG_CONFIG 3 RSE_TRNG_SUBSAMPLE_COUNT_2)
+            list(GET RSE_TRNG_CONFIG 4 RSE_TRNG_SUBSAMPLE_COUNT_3)
+
+            u32_to_hex_bytes_le(${RSE_TRNG_SUBSAMPLE_COUNT_0} _hex_sc_0)
+            u32_to_hex_bytes_le(${RSE_TRNG_SUBSAMPLE_COUNT_1} _hex_sc_1)
+            u32_to_hex_bytes_le(${RSE_TRNG_SUBSAMPLE_COUNT_2} _hex_sc_2)
+            u32_to_hex_bytes_le(${RSE_TRNG_SUBSAMPLE_COUNT_3} _hex_sc_3)
+
+            set(RSE_TRNG_SUBSAMPLE_COUNT "${_hex_sc_0}${_hex_sc_1}${_hex_sc_2}${_hex_sc_3}")
+        endif()
+
+        # Extract SP800-90B entropy test parameters
+        if(RSE_PROVISION_SP800_90B_ENTROPY_PARAMS)
+            list(LENGTH RSE_ENTROPY_PARAMS _len)
+            if(NOT _len EQUAL 2)
+                message(FATAL_ERROR
+                    "RSE_ENTROPY_PARAMS must contain exactly 2 integers "
+                    "(high_threshold and repetition_count), got ${_len}"
+                )
+            endif()
+            list(GET RSE_ENTROPY_PARAMS 0 RSE_ENTROPY_SP800_90B_HIGH_THRESHOLD)
+            list(GET RSE_ENTROPY_PARAMS 1 RSE_ENTROPY_SP800_90B_REPETITION_COUNT)
+        endif()
+
         set(CM_BUNDLE_SCRIPT_ARGS_TEMP
             ${CM_BUNDLE_SCRIPT_ARGS}
             $<$<BOOL:${RSE_OTP_HAS_RSE_ID}>:--non_secret_cm:cm.rse_id=${RSE_ID}>
+            $<$<BOOL:${RSE_PROVISION_TRNG_CONFIG}>:--non_secret_cm:cm.cc_trng_config.trng_in_use=${RSE_TRNG_ROSC_IN_USE}>
+            $<$<BOOL:${RSE_PROVISION_TRNG_CONFIG}>:--non_secret_cm:cm.cc_trng_config.trng_rosc_sc="${RSE_TRNG_SUBSAMPLE_COUNT}">
+            $<$<BOOL:${RSE_PROVISION_SP800_90B_ENTROPY_PARAMS}>:--non_secret_cm:cm.entropy_config.high_threshold=${RSE_ENTROPY_SP800_90B_HIGH_THRESHOLD}>
+            $<$<BOOL:${RSE_PROVISION_SP800_90B_ENTROPY_PARAMS}>:--non_secret_cm:cm.entropy_config.repetition_count=${RSE_ENTROPY_SP800_90B_REPETITION_COUNT}>
         )
+
         set(DM_BUNDLE_SCRIPT_ARGS_TEMP
             ${DM_BUNDLE_SCRIPT_ARGS}
             $<$<BOOL:${RSE_OTP_HAS_ROUTING_TABLES}>:--routing_tables_idx=${RSE_ID}>
@@ -375,6 +465,7 @@ if (TFM_DUMMY_PROVISIONING)
             "" # CM ROTPK index if PK not in ROM == CM_ROTPK (not for CM)
             "${RSE_PROVISIONING_CM_ENCRYPT_CODE_DATA}" # encrypt code and data
             ON # encrypt secret values
+            ON # sp mode required
             "${CM_BUNDLE_SCRIPT_ARGS_TEMP}" # OTP values args
             "${CM_BUNDLE_SCRIPT_DEPS}" # script specific CMake dependencies
         )
@@ -393,6 +484,7 @@ if (TFM_DUMMY_PROVISIONING)
             "${RSE_PROVISIONING_DM_SIGN_KEY_CM_ROTPK_IDX}" # CM ROTPK index if PK not in ROM == CM_ROTPK
             "${RSE_PROVISIONING_DM_ENCRYPT_CODE_DATA}" # encrypt code and data
             ON # encrypt secret values
+            ON # sp mode required
             "${DM_BUNDLE_SCRIPT_ARGS_TEMP}" # OTP values args
             "" # No additional dependencies
         )
@@ -411,9 +503,10 @@ if (TFM_DUMMY_PROVISIONING)
             "${RSE_PROVISIONING_DM_SIGN_KEY_CM_ROTPK_IDX}" # CM ROTPK index if PK not in ROM == CM_ROTPK
             "${RSE_PROVISIONING_CM_ENCRYPT_CODE_DATA}" # encrypt code and data
             ON # encrypt secret values
+            ON # sp mode required
             "${CM_BUNDLE_SCRIPT_ARGS_TEMP};${DM_BUNDLE_SCRIPT_ARGS_TEMP}" # OTP values args
             "${CM_BUNDLE_SCRIPT_DEPS}" # script specific CMake dependencies
-    )
+        )
     endforeach()
 
     if (RSE_DM_CHAINED_PROVISIONING)
@@ -431,18 +524,26 @@ if (TFM_DUMMY_PROVISIONING)
             "${RSE_PROVISIONING_DM_SIGN_KEY_CM_ROTPK_IDX}" # CM ROTPK index if PK not in ROM == CM_ROTPK
             "${RSE_PROVISIONING_DM_ENCRYPT_CODE_DATA}" # encrypt code and data
             OFF  # No secret values in chained blob to encrypt
+            ON # sp mode required
             "" # No provisioning values
             "" # No additional dependencies
         )
     endif()
 
-    if (RSE_NON_ENDORSED_DM_PROVISIONING)
+    if (RSE_NON_ENDORSED_DM_PROVISIONING OR RSE_ENDORSEMENT_CERTIFICATE_PROVISIONING)
+        set(VALID_LCS_STATES)
+        list(APPEND VALID_LCS_STATES SE)
+        if (RSE_ENDORSEMENT_CERTIFICATE_PROVISIONING)
+            list(APPEND VALID_LCS_STATES DM)
+        endif()
+
+        # In SE LCS or in DM LCS when performing endorsement cert provisioning we do not need to be in secure provisioning
         generate_provisioning_bundle(
             plain_data_handler_provisioning # bundle type
             ${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/create_plain_data_handler_provisioning_bundle.py # script
             plain_data_handler_provisioning_code # cmake executable target
             "${RSE_CM_BLOB_VERSION}" # blob version
-            "SE" # valid LCS states
+            "${VALID_LCS_STATES}" # valid LCS states
             OFF # symmetric provisioning enabled
             "ROTPK_NOT_IN_ROM" # signature config
             "${RSE_CM_PROVISIONING_SIGNING_KEY}" # signature key (if asymmetric)
@@ -450,6 +551,7 @@ if (TFM_DUMMY_PROVISIONING)
             "CM_ROTPK" # PK not in ROM configuration
             "${RSE_PROVISIONING_DM_SIGN_KEY_CM_ROTPK_IDX}" # CM ROTPK index if PK not in ROM == CM_ROTPK
             OFF # encrypt code and data
+            OFF # sp mode required
             OFF # No secret values in blob to ecrypt
             "" # No provisioning values
             "" # No additional dependencies

@@ -326,9 +326,7 @@ shown below.
    +--------------------------------------------+-----------------------------------------------------------------------------------------------------+-------------------------------------+
    | ``TFM_PARTITION_CRYPTO``                   | ``ON``                                                                                              | Enable Crypto service               |
    +--------------------------------------------+-----------------------------------------------------------------------------------------------------+-------------------------------------+
-   | ``TFM_MBEDCRYPTO_CONFIG_PATH``             | ``${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/tfm_mbedcrypto_config_profile_small.h``  | Mbed Crypto config file path        |
-   +--------------------------------------------+-----------------------------------------------------------------------------------------------------+-------------------------------------+
-   | ``TFM_MBEDCRYPTO_PSA_CRYPTO_CONFIG_PATH``  | ``${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/crypto_config_profile_small.h``          | Mbed Crypto PSA config file path    |
+   | ``TFM_TF_PSA_CRYPTO_CONFIG_PATH``          | ``${CMAKE_SOURCE_DIR}/lib/ext/tf-psa-crypto/tfpsacrypto_config/crypto_config_profile_small.h``      | TF-PSA-Crypto config file path      |
    +--------------------------------------------+-----------------------------------------------------------------------------------------------------+-------------------------------------+
    | ``CRYPTO_ASYM_SIGN_MODULE_ENABLED``        | ``OFF``                                                                                             | Enable asymmetric signature         |
    +--------------------------------------------+-----------------------------------------------------------------------------------------------------+-------------------------------------+
@@ -387,16 +385,14 @@ Other modules and configurations [11]_ are kept as default values.
 Additional configuration flags with more fine granularity can be added to
 control building of specific crypto algorithms and corresponding test cases.
 
-Mbed Crypto configurations
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+TF-PSA-Crypto configurations
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-TF-M Profile Small adds a dedicated Mbed Crypto config file
-``tfm_mbedcrypto_config_profile_small.h`` and Mbed Crypto PSA config file
-``crypto_config_profile_small.h`` at ``/lib/ext/mbedcrypto/mbedcrypto_config``
-folder, instead of the common one ``tfm_mbedcrypto_config_default.h`` and
+TF-M Profile Small adds a dedicated TF-PSA-Crypto config file ``crypto_config_profile_small.h``
+under ``/lib/ext/tf-psa-crypto/tfpsacrypto_config`` folder, instead of the common one
 ``crypto_config_default.h`` [11]_.
 
-Major Mbed Crypto configurations are set as listed below:
+Major cryptographic configurations are set as listed below:
 
     - Enable SHA256
     - Enable generic message digest wrappers
@@ -410,11 +406,11 @@ Other configurations can be selected to optimize the memory footprint of Crypto
 module.
 
 A device/use case can append an extra config header to the  Profile Small
-default Mbed Crypto config file. This can be done by setting the
-``TFM_MBEDCRYPTO_PLATFORM_EXTRA_CONFIG_PATH`` cmake variable in the platform
+default TF-PSA-Crypto config file. This can be done by setting the
+``TFM_TF_PSA_CRYPTO_PLATFORM_EXTRA_CONFIG_PATH`` cmake variable in the platform
 config file ``platform/ext<TFM_PLATFORM>/config.cmake``. This cmake variable is
-a wrapper around the ``MBEDTLS_USER_CONFIG_FILE`` options, but is preferred as
-it keeps all configuration in cmake.
+a wrapper around the ``TF_PSA_CRYPTO_USER_CONFIG_FILE`` options, but is
+preferred as it keeps all configuration in cmake.
 
 Internal Trusted Storage configurations
 ---------------------------------------
@@ -461,7 +457,7 @@ in Profile Small top-level CMake config file.
 Test configuration
 ------------------
 
-Some cryptography tests are disabled due to the reduced Mbed Crypto config.
+Some cryptography tests are disabled due to the reduced cryptographic configuration profile.
 Some of them are shown in the table below.
 
 .. table:: TFM options in Profile Small top-level CMake config file
@@ -611,4 +607,6 @@ Reference
 
 --------------
 
-*Copyright (c) 2020-2022, Arm Limited. All rights reserved.*
+*SPDX-License-Identifier: BSD-3-Clause*
+
+*SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors*

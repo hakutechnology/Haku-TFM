@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Copyright (c) 2021-2022, Arm Limited. All rights reserved.
+# SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -53,6 +53,7 @@ target_link_libraries(tfm_psa_rot_partition_fwu
         platform_s
         tfm_config
         tfm_sprt
+        psa_crypto_config
 )
 
 
@@ -69,6 +70,7 @@ target_compile_definitions(tfm_psa_rot_partition_fwu
     PRIVATE
         $<$<BOOL:${DEFAULT_MCUBOOT_FLASH_MAP}>:DEFAULT_MCUBOOT_FLASH_MAP>
         FWU_DEVICE_CONFIG_FILE="${FWU_DEVICE_CONFIG_FILE}"
+        $<$<BOOL:${FWU_DEVICE_IMPL_INFO_DEF_FILE}>:FWU_DEVICE_IMPL_INFO_DEF_FILE="${FWU_DEVICE_IMPL_INFO_DEF_FILE}">
 )
 
 ############################ Partition Defs ####################################

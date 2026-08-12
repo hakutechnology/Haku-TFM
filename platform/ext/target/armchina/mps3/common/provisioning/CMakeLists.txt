@@ -11,7 +11,7 @@ find_package(Python3)
 add_executable(provisioning_bundle)
 
 if(${TFM_DUMMY_PROVISIONING})
-    include(${CMAKE_SOURCE_DIR}/platform/ext/target/arm/mps3/common/provisioning/provisioning_config.cmake)
+    include(${CMAKE_SOURCE_DIR}/platform/ext/target/armchina/mps3/common/provisioning/provisioning_config.cmake)
 else()
     include("${PROVISIONING_KEYS_CONFIG}" OPTIONAL RESULT_VARIABLE PROVISIONING_KEYS_CONFIG_PATH)
     if(NOT PROVISIONING_KEYS_CONFIG_PATH)
@@ -43,14 +43,14 @@ target_link_options(provisioning_bundle
 
 target_link_options(provisioning_bundle
     PRIVATE
-        --entry=do_provision
+        $<$<C_COMPILER_ID:ARMClang,IAR>:LINKER:--entry=do_provision>
 )
 
 target_sources(provisioning_bundle
     PRIVATE
-        ./provisioning_code.c
-        ./provisioning_data.c
-        $<$<BOOL:${CONFIG_GNU_SYSCALL_STUB_ENABLED}>:${CMAKE_SOURCE_DIR}/platform/ext/common/syscalls_stub.c>
+        provisioning_code.c
+        provisioning_data.c
+        $<$<C_COMPILER_ID:GNU>:${CMAKE_SOURCE_DIR}/platform/ext/common/syscalls_stub.c>
 )
 
 target_include_directories(provisioning_bundle

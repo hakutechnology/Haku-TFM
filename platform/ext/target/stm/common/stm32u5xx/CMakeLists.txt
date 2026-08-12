@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Copyright (c) 2020-2022, Arm Limited. All rights reserved.
+# SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
 # Copyright (c) 2021 STMicroelectronics. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -81,7 +81,7 @@ target_sources(platform_s
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32u5xx_ll_dlyb.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32u5xx_hal_rtc.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32u5xx_hal_rtc_ex.c
-        $<$<STREQUAL:"${TFM_FIH_PROFILE}","HIGH">:${PLATFORM_DIR}/ext/common/template/tfm_fih_rng.c>
+        $<$<STREQUAL:"${TFM_FIH_PROFILE}","HIGH">:${PLATFORM_DIR}/ext/common/template/tfm_fih_platform.c>
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32u5xx_hal_hash.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32u5xx_hal_hash_ex.c
@@ -164,6 +164,8 @@ install(FILES
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32u5xx_hal_uart_ex.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32u5xx_hal_cortex.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32u5xx_hal_rcc_ex.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32u5xx_hal_ospi.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32u5xx_ll_dlyb.c
         DESTINATION ${INSTALL_PLATFORM_NS_DIR}/hal/Src
 )
 
@@ -220,10 +222,29 @@ if(BL2)
             ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32u5xx_hal_ospi.c
             ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32u5xx_ll_dlyb.c
             ${STM_COMMON_DIR}/hal/Native_Driver/low_level_rng.c
-            ${STM_COMMON_DIR}/hal/provision/otp_provision.c
             ${STM_COMMON_DIR}/hal/Native_Driver/nv_counters.c
-            ${STM_COMMON_DIR}/hal/provision/nvm_init.c
-            ${STM_COMMON_DIR}/hal/provision/nvmcnt_init.c
+    )
+
+
+    # Add sources TF-PSA-Crypto for BL2
+    target_sources(bl2
+        PRIVATE
+            ${TF_PSA_CRYPTO_PATH}/utilities/constant_time.c
+            ${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/cipher.c
+            ${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/cipher_wrap.c
+            ${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/psa_crypto_cipher.c
+    )
+
+    target_include_directories(bl2
+        PRIVATE
+            ${TF_PSA_CRYPTO_PATH}/utilities
+            ${TF_PSA_CRYPTO_PATH}/drivers/builtin/include
+    )
+
+    # for BL2 Crypto: provide mbedtls_psa_external_get_random()
+    target_sources(bl2_crypto
+        PRIVATE
+            ${STM_COMMON_DIR}/hal/accelerator/rng.c
     )
 
     target_compile_options(platform_bl2

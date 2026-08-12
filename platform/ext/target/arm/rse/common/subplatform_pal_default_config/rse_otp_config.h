@@ -30,6 +30,10 @@
 #define RSE_OTP_HAS_KRTL_USAGE_COUNTER
 #define RSE_OTP_HAS_LFT_COUNTER
 
+/* TRNG/Entropy related parameters */
+#define RSE_OTP_HAS_CC_TRNG_CONFIG
+#define RSE_OTP_HAS_SP800_90B_ENTROPY_PARAMS
+
 /* #define RSE_OTP_DM_SETS_DM_AND_DYNAMIC_AREA_SIZE */
 
 #define RSE_OTP_KRTL_COUNTER_MAX_VALUE 64
@@ -69,7 +73,8 @@
 #define RSE_OTP_CM_ROTPK_MAX_REVOCATIONS 3
 #define RSE_ROUTING_TABLES_SIZE 0
 #define RSE_OTP_CM_RESERVED_SIZE 4
-#define RSE_OTP_COD_SIZE 144
+#define RSE_OTP_COD_CMAC_SIZE 16
+#define RSE_OTP_COD_RAK_PUB_SIZE 96
 
 /* The following options control the BL1_2 area, and can be changed without
  * altering the ROM.
@@ -96,9 +101,11 @@
 
 #define RSE_OTP_MAX_REPROVISIONINGS 8
 #define RSE_OTP_RESERVED_COUNTER_BYTES 0
-/* #define RSE_OTP_HAS_IAK_ENDORSEMENT_CERTIFICATE */
-/* #define RSE_OTP_ENDORSEMENT_CERTIFICATE_SIZE 0x60 */
-/* #define RSE_OTP_ENDORSEMENT_CERTIFICATE_METADATA_SIZE 0x30 */
+/* #define RSE_OTP_HAS_ENDORSEMENT_CERTIFICATE */
+#define RSE_OTP_ENDORSEMENT_CERTIFICATE_SIGNATURE_SIZE 0x60
+#define RSE_OTP_ENDORSEMENT_CERTIFICATE_PARAMETERS_SIZE 0x60
+
+#define RSE_PS_FC_HANDLERS_NUM 3
 
 /* 4 banks of NV counters are provided. Each bank must be a fixed size, so there
  * can be up to 4 different sizes of NV counters in the unlocked area, but with

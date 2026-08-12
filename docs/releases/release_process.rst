@@ -88,10 +88,10 @@ Long Term Support (LTS)
 
 From v2.1.0, TF-M project will provide LTS branches. Every alternate release
 will be an LTS release maintained for 3 years.
-The LTS release will be synchronized with
-`Mbed TLS <https://www.trustedfirmware.org/projects/mbed-tls>`_
-project to be aligned with LTS releases cadence. Mbed TLS is used as the
-default cryptography library by the TF-M Crypto service.
+The LTS release will be synchronized with either
+`Mbed TLS or TF-PSA-Crypto <https://www.trustedfirmware.org/projects/mbed-tls>`_
+project to be aligned with LTS releases cadence. Either Mbed TLS or TF-PSA-Crypto
+is used as the default cryptography library by the TF-M Crypto service.
 
 The main purpose of TF-M LTS is to offer a maintained and PSA certified TF-M
 codebase for the whole period of LTS. Without LTS, every TF-M based product
@@ -106,7 +106,7 @@ TF-M intends to centralise PSA certification of the common code and carry it on
 for an LTS lifetime, ensuring that code is free from known bugs and security
 vulnerabilities. For this, each LTS branch will be initially PSA certified for
 a selected reference platform and recertified again on every TF-M release.
-Please see the process<link> below for the details. All platforms, based on LTS
+Please see the process below for the details. All platforms, based on LTS
 version can hold PSA certification obtained once without a need for
 recertification on updates if no vulnerability is found in a platform specific code.
 
@@ -201,7 +201,7 @@ LTS usage scenario
 ^^^^^^^^^^^^^^^^^^
 
 - Once released, the code (ex:*TF-MvX.Y.Z*) is submitted for PSA certification
-  using the reference platform :ref:`platform/arm/musca_b1/readme:Musca-B1 Platform Specifics`.
+  using the reference platform :ref:`platform/rpi/rp2350/readme:RP2350`.
 
 - After obtaining PSA certification the release branch is tagged
   *TF-MvX.Y.Z-LTS* creating a base for PSA certification of downstream projects.
@@ -237,4 +237,6 @@ Q&A
 
 --------------
 
-*Copyright (c) 2020-2024, Arm Limited. All rights reserved.*
+*SPDX-License-Identifier: BSD-3-Clause*
+
+*SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors*

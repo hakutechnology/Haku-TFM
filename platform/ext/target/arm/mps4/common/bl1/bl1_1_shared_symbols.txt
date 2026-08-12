@@ -1,7 +1,6 @@
 Driver_FLASH1
 KMU_DEV_S
 SystemInit
-bl1_aes_256_ctr_decrypt
 bl1_derive_key
 bl1_otp_read_key
 bl1_hash_compute
@@ -18,7 +17,16 @@ kmu_set_slot_invalid
 kmu_random_delay
 kmu_set_key_export_config
 kmu_set_key_export_config_locked
+kmu_invalidate_hardware_keys
 pq_crypto_verify
+psa_hash_compute
+psa_import_key
+psa_cipher_decrypt_setup
+psa_cipher_set_iv
+psa_cipher_update
+psa_cipher_abort
+psa_cipher_finish
+psa_destroy_key
 stdio_init
 stdio_output_string
 stdio_uninit
@@ -36,3 +44,11 @@ fputc
 putchar
 tfm_vprintf
 tfm_log
+_sys_close
+_sys_exit
+_sys_flen
+_sys_istty
+_sys_open
+_sys_seek
+_sys_write
+_ttywrch

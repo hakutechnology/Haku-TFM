@@ -8,6 +8,7 @@
 
 #include "config_tfm.h"
 #include "config_crypto_check.h"
+#include "coverity_check.h"
 #include "tfm_mbedcrypto_include.h"
 
 #include "tfm_crypto_api.h"
@@ -198,6 +199,7 @@ static psa_status_t tfm_crypto_api_dispatcher(psa_invec in_vec[],
                                               size_t out_len)
 {
     psa_status_t status = PSA_ERROR_CORRUPTION_DETECTED;
+    TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_11_5, "It's PSA API design to use pointer to void")
     const struct tfm_crypto_pack_iovec *iov = in_vec[0].base;
     int32_t caller_id = 0;
     struct tfm_crypto_key_id_s encoded_key = TFM_CRYPTO_KEY_ID_S_INIT;
@@ -348,24 +350,12 @@ static psa_status_t tfm_crypto_engine_init(void)
         return status;
     }
     VERBOSE("[Crypto] Init \033[0;32m%s\033[0m... \033[0;32mcomplete\033[0m.\n", library_info);
-
-    /* Initialise the crypto accelerator if one is enabled. If the driver API is
-     * the one defined by the PSA Unified Driver interface, the initialisation is
-     * performed directly through psa_crypto_init() while the PSA subsystem is
-     * initialised
-     */
-#if defined(CRYPTO_HW_ACCELERATOR) && defined(LEGACY_DRIVER_API_ENABLED)
-    INFO("[Crypto] Init HW accelerator...\n");
-    if (crypto_hw_accelerator_init() != 0) {
-        return PSA_ERROR_HARDWARE_FAILURE;
-    }
-    INFO("[Crypto] Init HW accelerator... \033[0;32mcomplete\033[0m.\n");
-#endif /* CRYPTO_HW_ACCELERATOR */
+    (void)library_info;
 
     /* Perform the initialisation of the PSA subsystem available through the chosen
-     * Cryptographic library. If a driver is built using the PSA Driver interface,
-     * the function below will perform also the same operations done by the HAL init
-     * crypto_hw_accelerator_init()
+     * Cryptographic library. If a driver is built using the PSA Driver interface
+     * (such as a crypto accelerator driver), the function below will perform also
+     * the same operations done by the HAL init crypto_hw_accelerator_init().
      */
     return psa_crypto_init();
 }

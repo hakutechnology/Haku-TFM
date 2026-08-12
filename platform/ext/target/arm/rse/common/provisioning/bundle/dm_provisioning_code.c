@@ -86,7 +86,7 @@ enum tfm_plat_err_t do_dm_provision(void) {
     if (lcm_err != LCM_ERROR_NONE) {
         return (enum tfm_plat_err_t)lcm_err;
     }
-
+#ifdef RSE_OTP_HAS_DYNAMIC_AREA
     INFO("Writing dynamic area info\n");
     lcm_err = lcm_otp_write(&LCM_DEV_S,
                             offsetof(struct rse_otp_header_area_t, dynamic_area_info),
@@ -109,18 +109,26 @@ enum tfm_plat_err_t do_dm_provision(void) {
     if (lcm_err != LCM_ERROR_NONE) {
         return (enum tfm_plat_err_t)lcm_err;
     }
-
-    dm_area_info = values->dm_area_info;
+#endif /* RSE_OTP_HAS_DYNAMIC_AREA */
 #endif /* OTP_CONFIG_DM_SETS_DM_AND_DYNAMIC_AREA_SIZE */
 
-#ifndef RSE_NON_ENDORSED_DM_PROVISIONING
     if (sizeof(values->dm) != dm_area_info.size) {
         return TFM_PLAT_ERR_DM_PROVISIONING_INVALID_DM_AREA_SIZE;
     }
 
     INFO("Writing DM provisioning values\n");
     lcm_err = lcm_otp_write(&LCM_DEV_S, dm_area_info.offset,
-                            sizeof(values->dm), (uint8_t *)(&values->dm));
+                            sizeof(values->dm) - sizeof(values->dm.rotpk_areas),
+                            (uint8_t *)(&values->dm));
+    if (lcm_err != LCM_ERROR_NONE) {
+        return (enum tfm_plat_err_t)lcm_err;
+    }
+
+#ifndef RSE_NON_ENDORSED_DM_PROVISIONING
+    INFO("Writing DM ROTPK values\n");
+    lcm_err = lcm_otp_write(&LCM_DEV_S,
+                            dm_area_info.offset + offsetof(struct rse_otp_dm_area_t, rotpk_areas),
+                            sizeof(values->dm.rotpk_areas), (uint8_t *)(&values->dm.rotpk_areas));
     if (lcm_err != LCM_ERROR_NONE) {
         return (enum tfm_plat_err_t)lcm_err;
     }

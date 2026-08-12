@@ -1,8 +1,5 @@
 /*
  * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
- * Copyright (c) 2021-2024 Cypress Semiconductor Corporation (an Infineon
- * company) or an affiliate of Cypress Semiconductor Corporation. All rights
- * reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -14,8 +11,8 @@
 #include "async.h"
 #include "config_spm.h"
 #include "critical_section.h"
-#include "compiler_ext_defs.h"
 #include "config_spm.h"
+#include "current.h"
 #include "ffm/psa_api.h"
 #include "fih.h"
 #include "runtime_defs.h"
@@ -34,10 +31,13 @@
 #include "psa/error.h"
 #include "internal_status_code.h"
 #include "sprt_partition_metadata_indicator.h"
+#include "coverity_check.h"
 
 #if TFM_PARTITION_NS_AGENT_MAILBOX == 1
 #include "psa_manifest/ns_agent_mailbox.h"
 #endif
+
+#include "compiler_ext_defs.h" /* Keep last. */
 
 /* Declare the global component list */
 struct partition_head_t partition_listhead;
@@ -53,10 +53,6 @@ ARCH_CLAIM_CTXCTRL_INSTANCE(spm_thread_context,
                             sizeof(spm_thread_stack));
 
 struct context_ctrl_t *p_spm_thread_context = &spm_thread_context;
-#endif
-
-#if (CONFIG_TFM_SECURE_THREAD_MASK_NS_INTERRUPT == 1) && defined(CONFIG_TFM_USE_TRUSTZONE)
-static bool basepri_set_by_ipc_schedule;
 #endif
 
 /*
@@ -98,9 +94,8 @@ static uint32_t query_state(const struct thread_t *p_thrd, uint32_t *p_retval)
             ((p_pt->signals_allowed & ASYNC_MSG_REPLY) != ASYNC_MSG_REPLY)) {
             p_pt->signals_asserted &= ~ASYNC_MSG_REPLY;
 
-#ifndef NDEBUG
+            assert(p_pt->p_replied != NULL);
             assert(p_pt->p_replied->status < TFM_HANDLE_STATUS_MAX);
-#endif
 
             /*
              * For FF-M Secure Partition, the reply is synchronous and only one
@@ -166,7 +161,7 @@ static void prv_process_metadata(struct partition_t *p_pt)
     p_rt_meta->psa_fns = &psa_api_thread_fn_call;
 #else
     FIH_CALL(tfm_hal_boundary_need_switch, fih_rc, get_spm_boundary(), p_pt->boundary);
-    if (fih_not_eq(fih_rc, fih_int_encode(false))) {
+    if (FIH_NOT_EQ(fih_rc, false)) {
         p_rt_meta->psa_fns = &psa_api_svc;
     } else {
         p_rt_meta->psa_fns = &psa_api_thread_fn_call;
@@ -198,6 +193,7 @@ psa_status_t backend_messaging(struct connection_t *p_connection)
     struct partition_t *p_owner = NULL;
     psa_signal_t signal = 0;
     psa_status_t ret = PSA_SUCCESS;
+    struct critical_section_t cs = CRITICAL_SECTION_STATIC_INIT;
 
     if (!p_connection || !p_connection->service ||
         !p_connection->service->p_ldinf         ||
@@ -208,7 +204,9 @@ psa_status_t backend_messaging(struct connection_t *p_connection)
     p_owner = p_connection->service->partition;
     signal = p_connection->service->p_ldinf->signal;
 
+    CRITICAL_SECTION_ENTER(cs);
     UNI_LIST_INSERT_AFTER(p_owner, p_connection, p_reqs);
+    CRITICAL_SECTION_LEAVE(cs);
 
     /* Messages put. Update signals */
     ret = backend_assert_signal(p_owner, signal);
@@ -232,6 +230,7 @@ psa_status_t backend_messaging(struct connection_t *p_connection)
 psa_status_t backend_replying(struct connection_t *handle, int32_t status)
 {
     struct partition_t *client = handle->p_client;
+    struct critical_section_t cs = CRITICAL_SECTION_STATIC_INIT;
 
     /* Prepare the replied handle. */
     handle->replied_value = (uintptr_t)status;
@@ -243,7 +242,9 @@ psa_status_t backend_replying(struct connection_t *handle, int32_t status)
      *    and will be first replied.
      *    - Currently, this is used for mailbox multi-core technology.
      */
+    CRITICAL_SECTION_ENTER(cs);
     UNI_LIST_INSERT_AFTER(client, handle, p_replied);
+    CRITICAL_SECTION_LEAVE(cs);
 
     return backend_assert_signal(handle->p_client, ASYNC_MSG_REPLY);
 }
@@ -330,19 +331,28 @@ void backend_init_comp_assuredly(struct partition_t *p_pt, uint32_t service_sett
     uint32_t param;
     int32_t index = PARTITION_TYPE_TO_INDEX(p_pldi->flags);
 
+    TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_11_3, "Intentional pointer cast");
     ARCH_CTXCTRL_INIT(&p_pt->ctx_ctrl,
                       LOAD_ALLOCED_STACK_ADDR(p_pldi),
                       p_pldi->stack_size);
 
+#ifdef CONFIG_TFM_REUSE_COPY_AREA_FOR_SP_STACKS
+    memset((uint8_t *)p_pt->ctx_ctrl.sp_limit, 0, p_pldi->stack_size);
+#endif
+
     watermark_stack(p_pt);
 
-    THRD_INIT(&p_pt->thrd, &p_pt->ctx_ctrl,
-              TO_THREAD_PRIORITY(PARTITION_PRIORITY(p_pldi->flags)));
+    /*
+     * Use Secure Partition loading order as the initial priority of scheduling
+     * in IPC backend.
+     */
+    THRD_INIT(&p_pt->thrd, &p_pt->ctx_ctrl, p_pldi->load_order);
 
     thrd_entry = (comp_init_fns[index])(p_pt, service_setting, &param);
 
     prv_process_metadata(p_pt);
 
+    TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_11_6, "Intentional pointer cast")
     thrd_start(&p_pt->thrd, thrd_entry, THRD_GENERAL_EXIT, (void *)param);
 }
 
@@ -350,7 +360,7 @@ uint32_t backend_system_run(void)
 {
     uint32_t control;
     const struct partition_t *p_cur_pt;
-    fih_int fih_rc = FIH_FAILURE;
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
 
     assert(SPM_THREAD_CONTEXT);
 
@@ -375,7 +385,7 @@ uint32_t backend_system_run(void)
                             struct partition_t, ctx_ctrl);
 
     FIH_CALL(tfm_hal_activate_boundary, fih_rc, p_cur_pt->p_ldinf, p_cur_pt->boundary);
-    if (fih_not_eq(fih_rc, fih_int_encode(TFM_HAL_SUCCESS))) {
+    if (FIH_NOT_EQ(fih_rc, TFM_HAL_SUCCESS)) {
         tfm_core_panic();
     }
 
@@ -403,10 +413,12 @@ psa_signal_t backend_wait_signals(struct partition_t *p_pt, psa_signal_t signals
     return ret;
 }
 
-#if (CONFIG_TFM_HYBRID_PLAT_SCHED_TYPE == TFM_HYBRID_PLAT_SCHED_NSPE)
-static void backend_assert_hybridplat_signal(
+#if (CONFIG_TFM_HYBRID_PLAT_SCHED_TYPE == TFM_HYBRID_PLAT_SCHED_NSPE) || \
+    (CONFIG_TFM_HYBRID_PLAT_SCHED_TYPE == TFM_HYBRID_PLAT_SCHED_BALANCED)
+static void hybridplat_mbox_irq_signal_assert(
     struct partition_t *p_pt, psa_signal_t signal)
 {
+
     const struct irq_load_info_t *irq_info;
     uint32_t irq_info_idx;
     uint32_t nirqs;
@@ -427,14 +439,40 @@ static void backend_assert_hybridplat_signal(
             /*
              * The incoming signal is found in the irq_load_info_t,
              * do not assert the signal now.
-             * NSPE will drive the processing for this request via the mailbox
-             * dedicated auxiliary service.
+             * Local NSPE will drive the processing for this request via the
+             * mailbox dedicated auxiliary service.
              */
             return;
         }
     }
 
     p_pt->signals_asserted |= signal;
+}
+
+static void backend_assert_hybridplat_signal(
+    struct partition_t *p_pt, psa_signal_t signal)
+{
+
+    if (!IS_NS_AGENT_MAILBOX(p_pt->p_ldinf)) {
+        /* Exit early if not a mailbox-related event */
+        p_pt->signals_asserted |= signal;
+
+        return;
+    }
+
+#if (CONFIG_TFM_HYBRID_PLAT_SCHED_TYPE == TFM_HYBRID_PLAT_SCHED_BALANCED)
+    const struct irq_load_info_t *p_ildi = LOAD_INFO_IRQ(p_pt->p_ldinf);
+
+    if (p_ildi->mbox_flags == MBOX_IRQ_FLAGS_DEFAULT_SCHEDULE) {
+        p_pt->signals_asserted |= signal;
+    } else if (p_ildi->mbox_flags == MBOX_IRQ_FLAGS_DEFER_SCHEDULE) {
+        hybridplat_mbox_irq_signal_assert(p_pt, signal);
+    }
+#endif
+
+#if (CONFIG_TFM_HYBRID_PLAT_SCHED_TYPE == TFM_HYBRID_PLAT_SCHED_NSPE)
+    hybridplat_mbox_irq_signal_assert(p_pt, signal);
+#endif
 }
 #endif
 
@@ -449,7 +487,8 @@ psa_status_t backend_assert_signal(struct partition_t *p_pt, psa_signal_t signal
 
     CRITICAL_SECTION_ENTER(cs_signal);
 
-#if (CONFIG_TFM_HYBRID_PLAT_SCHED_TYPE == TFM_HYBRID_PLAT_SCHED_NSPE)
+#if (CONFIG_TFM_HYBRID_PLAT_SCHED_TYPE == TFM_HYBRID_PLAT_SCHED_NSPE) || \
+    (CONFIG_TFM_HYBRID_PLAT_SCHED_TYPE == TFM_HYBRID_PLAT_SCHED_BALANCED)
     backend_assert_hybridplat_signal(p_pt, signal);
 #else
     p_pt->signals_asserted |= signal;
@@ -514,7 +553,7 @@ uint32_t backend_abi_leaving_spm(uint32_t result)
 
 uint64_t ipc_schedule(uint32_t exc_return)
 {
-    fih_int fih_rc = FIH_FAILURE;
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
     FIH_RET_TYPE(bool) fih_bool;
     AAPCS_DUAL_U32_T ctx_ctrls;
     const struct partition_t *p_part_curr;
@@ -525,19 +564,6 @@ uint64_t ipc_schedule(uint32_t exc_return)
 
     /* Protect concurrent access to current thread/component and thread status */
     CRITICAL_SECTION_ENTER(cs);
-
-#if (CONFIG_TFM_SECURE_THREAD_MASK_NS_INTERRUPT == 1) && defined(CONFIG_TFM_USE_TRUSTZONE)
-    if (__get_BASEPRI() == 0) {
-        /*
-         * If BASEPRI is not set, that means an interrupt was taken when
-         * Non-Secure code was executing, and a scheduling is necessary because
-         * a secure partition become runnable.
-         */
-        assert(!basepri_set_by_ipc_schedule);
-        basepri_set_by_ipc_schedule = true;
-        __set_BASEPRI(SECURE_THREAD_EXECUTION_PRIORITY);
-    }
-#endif
 
     p_curr_ctx = CURRENT_THREAD->p_context_ctrl;
 
@@ -551,6 +577,7 @@ uint64_t ipc_schedule(uint32_t exc_return)
             TFM_FPU_CONTEXT_SIZE;
 
     pth_next = thrd_next();
+    assert(pth_next != NULL);
 
     AAPCS_DUAL_U32_SET(ctx_ctrls, (uint32_t)p_curr_ctx, (uint32_t)p_curr_ctx);
 
@@ -565,49 +592,62 @@ uint64_t ipc_schedule(uint32_t exc_return)
         }
 
         /*
+         * FPU lazy stacking context preservation uses privilege and relative priorities
+         * recorded during original stacking. Thus it's important to flush FP context
+         * before boundary is changed for a new partition.
+         * Flush is always done (even if tfm_hal_boundary_need_switch returns false) to
+         * avoid issues in complex scheduling scenarios.
+         */
+        ARCH_FLUSH_FP_CONTEXT();
+
+        /*
          * If required, let the platform update boundary based on its
          * implementation. Change privilege, MPU or other configurations.
          */
         FIH_CALL(tfm_hal_boundary_need_switch, fih_bool,
                  p_part_curr->boundary, p_part_next->boundary);
-        if (fih_not_eq(fih_bool, fih_int_encode(false))) {
+        if (FIH_NOT_EQ(fih_bool, false)) {
             FIH_CALL(tfm_hal_activate_boundary, fih_rc,
                      p_part_next->p_ldinf, p_part_next->boundary);
-            if (fih_not_eq(fih_rc, fih_int_encode(TFM_HAL_SUCCESS))) {
+            if (FIH_NOT_EQ(fih_rc, TFM_HAL_SUCCESS)) {
                 tfm_core_panic();
             }
         }
-        ARCH_FLUSH_FP_CONTEXT();
-
-#if (CONFIG_TFM_SECURE_THREAD_MASK_NS_INTERRUPT == 1) && defined(CONFIG_TFM_USE_TRUSTZONE)
-        if (IS_NS_AGENT_TZ(p_part_next->p_ldinf)) {
-            /*
-             * The Non-Secure Agent for TrustZone is going to be scheduled.
-             * A secure partition was scheduled previously, so BASEPRI must be
-             * set to non-zero. However BASEPRI only needs to be reset to 0 if
-             * Non-Secure code execution was interrupted (and not got to secure
-             * execution through a veneer call. Veneers set and unset BASEPRI on
-             * enter and exit). In this case basepri_set_by_ipc_schedule is set,
-             * so it can be used in the condition.
-             */
-            assert(__get_BASEPRI() == SECURE_THREAD_EXECUTION_PRIORITY);
-            if (basepri_set_by_ipc_schedule) {
-                basepri_set_by_ipc_schedule = false;
-                __set_BASEPRI(0);
-            }
-        }
-#endif
 
         AAPCS_DUAL_U32_SET_A1(ctx_ctrls, (uint32_t)pth_next->p_context_ctrl);
 
         CURRENT_THREAD = pth_next;
     }
 
+#if (CONFIG_TFM_SECURE_THREAD_MASK_NS_INTERRUPT == 1) && defined(CONFIG_TFM_USE_TRUSTZONE)
+    /*
+     * Force update of BASEPRI because PendSV can be called either by PSA API or interrupt handler.
+     * And it's not necessary that PendSV actually performed partition switching because
+     * blocked partition is not waiting for a new signal right now thus it will not be unblocked.
+     */
+    uint32_t basepri = IS_NS_AGENT_TZ(p_part_next->p_ldinf) ?
+                       0u :  /* It's ok to interrupt NS Agent TZ veneer code by non-secure interrupt */
+                       SECURE_THREAD_EXECUTION_PRIORITY; /* Mask non-secure interrupts */
+    __set_BASEPRI(basepri);
+#endif
+
     /* Update meta indicator */
     if (p_part_next->p_metadata == NULL) {
         tfm_core_panic();
     }
+#if CONFIG_TFM_PARTITION_META_DYNAMIC_ISOLATION == 1
+    /* Call API to ensure that shared metadata section is RW accessible before
+     * changing it
+     */
+    tfm_hal_shared_metadata_rw_enable();
+#endif /* CONFIG_TFM_PARTITION_META_DYNAMIC_ISOLATION == 1 */
     p_partition_metadata = (uintptr_t)(p_part_next->p_metadata);
+#if CONFIG_TFM_PARTITION_META_DYNAMIC_ISOLATION == 1
+    /* Call API to ensure that shared metadata section is RO accessible after
+     * changing it
+     */
+    tfm_hal_shared_metadata_rw_disable();
+#endif /* CONFIG_TFM_PARTITION_META_DYNAMIC_ISOLATION == 1 */
 
     /*
      * ctx_ctrl is set from struct thread_t's p_context_ctrl, and p_part_curr

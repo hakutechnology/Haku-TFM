@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Nordic Semiconductor ASA
+ * Copyright (c) 2024, Nordic Semiconductor ASA.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include <nrfx.h>
 #include <hal/nrf_oscillators.h>
-#include <nrf_erratas.h>
+#include <hal/nrf_regulators.h>
 
 #ifndef BIT_MASK
 /* Use Zephyr BIT_MASK for unasigned integers */
@@ -23,7 +23,7 @@ void __attribute__((weak)) CRACEN_IRQHandler(void){};
 /* This is a simplified version of the function existing in the Zephyr's soc.c file for
  * the nRF54L15.
  * This function only supports one static configuration.
- * It is defined as weak to allow the sdk-nrf version to be used when available.
+ * This function is not used with sdk-nrf, the soc.c file from Zephyr provides this function there.
  *
  * The LFXO, HFXO configuration are taken from a sample build in sdk-nrf with the following
  * properties:
@@ -59,7 +59,8 @@ void __attribute__((weak)) CRACEN_IRQHandler(void){};
  * And the NRF54L_ERRATA_31_ENABLE_WORKAROUND is enabled.
  *
  */
-int  __attribute__((weak)) nordicsemi_nrf54l_init(void){
+#ifndef __NRF_TFM__
+int nordicsemi_nrf54l_init(void){
 	uint32_t xosc32ktrim = NRF_FICR->XOSC32KTRIM;
 
 	uint32_t offset_k =
@@ -156,6 +157,8 @@ int  __attribute__((weak)) nordicsemi_nrf54l_init(void){
 		*((volatile uint32_t *)0x5012063Cul) &= ~(1<<19);
 	}
 
+	nrf_regulators_vreg_enable_set(NRF_REGULATORS, NRF_REGULATORS_VREG_MAIN, true);
 
         return 0;
 }
+#endif /* __NRF_TFM__ */

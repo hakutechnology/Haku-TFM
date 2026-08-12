@@ -19,6 +19,8 @@
  */
 
 #include <limits.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <tfm_platform_api.h>
 
 #ifdef __cplusplus
@@ -31,6 +33,11 @@ enum tfm_platform_ioctl_core_reqest_types_t {
 	TFM_PLATFORM_IOCTL_READ_SERVICE,
 	TFM_PLATFORM_IOCTL_WRITE32_SERVICE,
 	TFM_PLATFORM_IOCTL_GPIO_SERVICE,
+	TFM_PLATFORM_IOCTL_MRAMC_INIT_SERVICE,
+	TFM_PLATFORM_IOCTL_MRAMC_SET_WEN_SERVICE,
+	TFM_PLATFORM_IOCTL_RAM_CTRL_SERVICE,
+	TFM_PLATFORM_IOCTL_WIFI_KMU_WRITE_KEY_SERVICE,
+	TFM_PLATFORM_IOCTL_WIFI_KMU_ERASE_KEYS_SERVICE,
 	/* Last core service, start platform specific from this value. */
 	TFM_PLATFORM_IOCTL_CORE_LAST
 };
@@ -88,6 +95,50 @@ struct tfm_gpio_service_args {
 struct tfm_gpio_service_out {
 	uint32_t result;
 };
+
+#if defined(CONFIG_SOC_NRF7120_TFM_MRAMC_SERVICE)
+struct tfm_mramc_set_wen_service_args_t {
+	uint32_t write_mode;
+};
+#endif
+
+#if defined(CONFIG_SOC_SERIES_NRF71_TFM_RAM_CTRL_SERVICE) || defined(TFM_NRF_RAM_CTRL_SERVICE)
+/** @brief RAM-control operation selector. */
+enum tfm_ram_ctrl_op {
+	/** System ON power (MEMCONF CONTROL), applied immediately. */
+	TFM_RAM_CTRL_OP_POWER,
+	/** System OFF retention (MEMCONF RET), applied immediately. */
+	TFM_RAM_CTRL_OP_RETAIN,
+	/** Read back CONTROL/RET/RET2. */
+	TFM_RAM_CTRL_OP_READ_STATUS,
+};
+
+/** @brief Argument list for the RAM-control service. */
+struct tfm_ram_ctrl_service_args_t {
+	uint32_t op;   /* enum tfm_ram_ctrl_op */
+	uint32_t addr; /* RAM region start (must lie within non-secure RAM) */
+	uint32_t len;  /* RAM region length in bytes */
+	uint32_t on;   /* powered/retained (true) or not (false) */
+};
+
+/** @brief Output for the RAM-control service. */
+struct tfm_ram_ctrl_service_out_t {
+	uint32_t result;
+	uint32_t control;     /* MEMCONF POWER[0].CONTROL snapshot (read status) */
+	uint32_t ret;         /* MEMCONF POWER[0].RET snapshot (read status) */
+	uint32_t ret2;        /* MEMCONF POWER[0].RET2 snapshot (read status) */
+};
+#endif
+
+#if defined(CONFIG_NRF_WIFI_KMU)
+/** @brief Argument list for Wi-Fi KMU write key service */
+struct tfm_wifi_kmu_write_key_service_args_t {
+	uint32_t slot_id;
+	uint32_t target_addr;
+	const uint8_t *key_buffer;
+	size_t key_size;
+};
+#endif /* CONFIG_NRF_WIFI_KMU */
 
 /**
  * @brief Perform a read operation.
@@ -151,6 +202,84 @@ enum tfm_write32_service_result {
 enum tfm_platform_err_t tfm_platform_gpio_pin_mcu_select(uint32_t pin_number, uint32_t mcu,
 							 uint32_t *result);
 
+#if defined(CONFIG_SOC_NRF7120_TFM_MRAMC_SERVICE)
+/**
+ * @brief Initialise MRAMC peripheral.
+ *
+ * @return On success the processor will initialise MRAMC, in case of error it returns
+ *         values as specified by the \ref tfm_platform_err_t
+ */
+enum tfm_platform_err_t tfm_platform_mramc_init(void);
+
+/**
+ * @brief Setting write permission for MRAMC peripheral.
+ *
+ * @param write_mode    Write mode for MRAMC peripheral.
+ *
+ * @return On success the processor will set MRAMC config write mode, in case of error it returns
+ *         values as specified by the \ref tfm_platform_err_t
+ */
+enum tfm_platform_err_t tfm_platform_mramc_set_wen(uint32_t write_mode);
+#endif /* SOC_NRF7120_TFM_MRAMC_SERVICE */
+
+#if defined(CONFIG_SOC_SERIES_NRF71_TFM_RAM_CTRL_SERVICE)
+/**
+ * @brief Power up/down a non-secure RAM range in System ON (MEMCONF CONTROL).
+ *
+ * @param addr  Start address of the range (must be within non-secure RAM).
+ * @param len   Length of the range in bytes.
+ * @param on    true to power up, false to power down.
+ *
+ * @return Values as specified by \ref tfm_platform_err_t.
+ */
+enum tfm_platform_err_t tfm_platform_ram_ctrl_power_set(uint32_t addr, uint32_t len, bool on);
+
+/**
+ * @brief Mark/unmark a non-secure RAM range for retention across System OFF.
+ *
+ * Applied immediately in the secure domain.
+ *
+ * @param addr  Start address of the range (must be within non-secure RAM).
+ * @param len   Length of the range in bytes.
+ * @param on    true to retain across System OFF, false to drop retention.
+ *
+ * @return Values as specified by \ref tfm_platform_err_t.
+ */
+enum tfm_platform_err_t tfm_platform_ram_ctrl_retention_set(uint32_t addr, uint32_t len, bool on);
+
+/**
+ * @brief Read back MEMCONF POWER[0] CONTROL/RET/RET2.
+ *
+ * @param control      MEMCONF POWER[0].CONTROL value (may be NULL).
+ * @param ret          MEMCONF POWER[0].RET value (may be NULL).
+ * @param ret2         MEMCONF POWER[0].RET2 value (may be NULL).
+ * @return Values as specified by \ref tfm_platform_err_t.
+ */
+enum tfm_platform_err_t tfm_platform_ram_ctrl_read_status(uint32_t *control, uint32_t *ret,
+							  uint32_t *ret2);
+#endif /* NRF_TFM_RAM_CTRL_SERVICE */
+
+#if defined(CONFIG_NRF_WIFI_KMU)
+/**
+ * @brief Write key to Wi-Fi secure RAM via KMU.
+ *
+ * @param[in] slot_id      Starting KMU slot ID.
+ * @param[in] target_addr  Address in Wi-Fi secure RAM.
+ * @param[in] key_buffer   Buffer containing key.
+ * @param[in] key_size     Size of key buffer in bytes.
+ *
+ * @return Values as specified by \ref tfm_platform_err_t.
+ */
+enum tfm_platform_err_t tfm_platform_wifi_kmu_write_key(uint32_t slot_id, uint32_t target_addr,
+							const uint8_t *key_buffer, size_t key_size);
+
+/**
+ * @brief Erase all KMU slots used by Wi-Fi keys.
+ *
+ * @return Values as specified by \ref tfm_platform_err_t.
+ */
+enum tfm_platform_err_t tfm_platform_wifi_kmu_erase_keys(void);
+#endif /* CONFIG_NRF_WIFI_KMU */
 
 #ifdef __cplusplus
 }

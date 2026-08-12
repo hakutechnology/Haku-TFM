@@ -8,7 +8,7 @@
   * @attention
   *
   * <h2><center>&copy; Copyright (c) 2021 STMicroelectronics.
-  * Copyright (c) 2017-2020 Arm Limited
+  * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
   * All rights reserved.</center></h2>
   *
   * This software component is licensed by ST under BSD 3-Clause license,
@@ -672,7 +672,7 @@ void LL_SECU_CheckStaticProtections(void)
     BOOT_LOG_ERR("Unexpected value for secure flash protection");
     Error_Handler();
 #else
-    BOOT_LOG_ERR("Unexpected value for secure flash protection: set wmsec1");
+    BOOT_LOG_WRN("Unexpected value for secure flash protection: set wmsec1");
     flash_option_bytes_bank1.WMSecStartPage = start;
     flash_option_bytes_bank1.WMSecEndPage = end;
     flash_option_bytes_bank1.OptionType |= OPTIONBYTE_WMSEC;
@@ -695,7 +695,7 @@ void LL_SECU_CheckStaticProtections(void)
     BOOT_LOG_ERR("Unexpected value for secure flash protection");
     Error_Handler();
 #else
-    BOOT_LOG_ERR("Unexpected value for secure flash protection : set wmsec2");
+    BOOT_LOG_WRN("Unexpected value for secure flash protection : set wmsec2");
     flash_option_bytes_bank2.WMSecStartPage = start;
     flash_option_bytes_bank2.WMSecEndPage = end;
     flash_option_bytes_bank2.OptionType = OPTIONBYTE_WMSEC;
@@ -712,6 +712,7 @@ void LL_SECU_CheckStaticProtections(void)
     BOOT_LOG_ERR("Unexpected value for secure flash protection");
     Error_Handler();
 #else
+    BOOT_LOG_WRN("Unexpected value for secure flash protection : set wmsec2");
     /* bank is not unsecured , modify option bytes */
     flash_option_bytes_bank2.WMSecStartPage = 127;
     flash_option_bytes_bank2.WMSecEndPage = 0;
@@ -736,11 +737,10 @@ void LL_SECU_CheckStaticProtections(void)
     BOOT_LOG_ERR("Unexpected value for write protection ");
     Error_Handler();
 #else
+    BOOT_LOG_WRN("Unexpected value for write protection : set wrp1");
     flash_option_bytes_bank1.WRPStartOffset = start;
     flash_option_bytes_bank1.WRPEndOffset = end;
     flash_option_bytes_bank1.WRPArea |= OB_WRPAREA_BANK1_AREAA;
-
-    BOOT_LOG_ERR("Unexpected value for write protection : set wrp1");
     flash_option_bytes_bank1.OptionType |= OPTIONBYTE_WRP;
 #endif /* TFM_ENABLE_SET_OB */
   }
@@ -769,11 +769,10 @@ void LL_SECU_CheckStaticProtections(void)
     BOOT_LOG_ERR("Unexpected value for write protection ");
     Error_Handler();
 #else
+    BOOT_LOG_WRN("Unexpected value for write protection : set wrp2");
     flash_option_bytes_bank2.WRPStartOffset = start;
     flash_option_bytes_bank2.WRPEndOffset = end;
     flash_option_bytes_bank2.WRPArea |= OB_WRPAREA_BANK2_AREAA;
-
-    BOOT_LOG_ERR("Unexpected value for write protection : set wrp2");
     flash_option_bytes_bank2.OptionType |= OPTIONBYTE_WRP;
 #endif /* TFM_ENABLE_SET_OB */
   }
@@ -808,7 +807,7 @@ void LL_SECU_CheckStaticProtections(void)
     BOOT_LOG_ERR("Unexpected value for secure user flash protection");
     Error_Handler();
 #else
-    BOOT_LOG_ERR("Unexpected value for secure user flash protection : set hdp1");
+    BOOT_LOG_WRN("Unexpected value for secure user flash protection : set hdp1");
     flash_option_bytes_bank1.WMSecStartPage = start;
     flash_option_bytes_bank1.WMHDPEndPage = end;
     flash_option_bytes_bank1.OptionType |= OPTIONBYTE_WMSEC;
@@ -1749,7 +1748,7 @@ RTC_HandleTypeDef RTCHandle;
 static void active_tamper(void)
 {
 #if 0
-    fih_int fih_rc = FIH_FAILURE;
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
 #endif
 #if (TFM_TAMPER_ENABLE == ALL_TAMPER)
     RTC_ActiveTampersTypeDef sAllTamper;
@@ -1899,7 +1898,7 @@ static void active_tamper(void)
             Error_Handler();
         }
         FIH_CALL(boot_fih_memequal, fih_rc,(void *)&TamperSecureConf, (void *)&TamperSecureConfGet, sizeof(TamperSecureConf));
-        if (fih_not_eq(fih_rc, FIH_SUCCESS)) {
+        if (FIH_NOT_EQ(fih_rc, FIH_SUCCESS)) {
                 Error_Handler();
         }
 #endif
@@ -1911,7 +1910,7 @@ static void active_tamper(void)
             Error_Handler();
         }
         FIH_CALL(boot_fih_memequal, fih_rc,(void *)&TamperPrivConf, (void *)&TamperPrivConfGet, sizeof(TamperPrivConf));
-        if (fih_not_eq(fih_rc, FIH_SUCCESS)) {
+        if (FIH_NOT_EQ(fih_rc, FIH_SUCCESS)) {
                 Error_Handler();
         }
 #endif

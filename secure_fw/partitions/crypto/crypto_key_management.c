@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, Arm Limited. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "config_tfm.h"
+#include "coverity_check.h"
 #include "tfm_mbedcrypto_include.h"
 #include "tfm_crypto_api.h"
 #include "tfm_crypto_key.h"
@@ -17,6 +18,7 @@
 
 #include "crypto_library.h"
 
+TFM_COVERITY_DEVIATE_BLOCK(MISRA_C_2023_Rule_11_5, "It's PSA API design to use pointer to void")
 /*!
  * \addtogroup tfm_crypto_api_shim_layer
  *
@@ -66,20 +68,14 @@ psa_status_t tfm_crypto_key_management_interface(psa_invec in_vec[],
         *key_id = CRYPTO_LIBRARY_GET_KEY_ID(library_key);
     }
     break;
-    case TFM_CRYPTO_OPEN_KEY_SID:
+    case TFM_CRYPTO_ABANDONED_OPEN_KEY_SID:
     {
-        psa_key_id_t *key_id = out_vec[0].base;
-        if ((out_vec[0].base == NULL) || (out_vec[0].len < sizeof(psa_key_id_t))) {
-            return PSA_ERROR_PROGRAMMER_ERROR;
-        }
-
-        status = psa_open_key(library_key, &library_key);
-        *key_id = CRYPTO_LIBRARY_GET_KEY_ID(library_key);
+        return PSA_ERROR_NOT_SUPPORTED;
     }
     break;
-    case TFM_CRYPTO_CLOSE_KEY_SID:
+    case TFM_CRYPTO_ABANDONED_CLOSE_KEY_SID:
     {
-        status = psa_close_key(library_key);
+        return PSA_ERROR_NOT_SUPPORTED;
     }
     break;
     case TFM_CRYPTO_DESTROY_KEY_SID:
@@ -186,3 +182,4 @@ psa_status_t tfm_crypto_key_management_interface(psa_invec in_vec[],
 }
 #endif /* CRYPTO_KEY_MODULE_ENABLED  */
 /*!@}*/
+TFM_COVERITY_BLOCK_END(MISRA_C_2023_Rule_11_5)

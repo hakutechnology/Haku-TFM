@@ -1,49 +1,16 @@
-#!/usr/bin/env python3
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 
-import c_struct
-import c_macro
-import c_include
+from tfm_tools.c_struct import C_struct
+from tfm_tools.c_macro import C_macro
 import pickle
-import sys
-import argparse
-import arg_utils
+from os.path import isfile, dirname, isdir
 
-import logging
-logger = logging.getLogger("TF-M.{}".format(__name__))
-
-def add_arguments(parser : argparse.ArgumentParser,
-                  prefix : str = "",
-                  required : bool = True,
-                  ) -> None:
-
-    arg_utils.add_prefixed_argument(parser, "otp_image_input", help="binary file of OTP image to import",
-                                            type=arg_utils.arg_type_bytes, required=False);
-
-    arg_utils.add_prefixed_argument(parser, "otp_image_output_file", help="file to export binary OTP image to",
-                                            type=arg_utils.arg_type_bytes_output_file, required=False);
-
-    return arg_utils.pre_parse_args(parser, "otp_config", help="Path to otp config file",
-                                             type=OTP_config.from_config_file)
-
-
-def parse_args(args : argparse.Namespace,
-               prefix : str = "",
-               ) -> dict:
-    out = {}
-
-    if "otp_config" not in out.keys():
-        out |= arg_utils.parse_args_automatically(args, ["otp_config"], prefix)
-
-    if otp_image := arg_utils.get_arg(args, "otp_image_input", prefix):
-        out[otp_config].set_value_from_bytes(otp_image)
-
-    return out
+region_names = ['header', 'cm', 'bl1_2', 'dm', 'soc', 'dynamic']
 
 class OTP_config:
     def __init__(self, header, cm, bl1_2, dm, dynamic, soc, defines):
@@ -54,30 +21,44 @@ class OTP_config:
         self.dynamic = dynamic
         self.soc = soc
         self.defines = defines
-        self.defines._definitions = {k:v for k,v in self.defines._definitions.items() if not callable(v)}
-        self.defines.__dict__ = {k:v for k,v in self.defines.__dict__.items() if not callable(v)}
+        self.defines._definitions = {k: v for k, v in self.defines._definitions.items()
+                                     if not callable(v)}
+
+        self.defines.__dict__ = {k: v for k, v in self.defines.__dict__.items()
+                                 if not callable(v)}
+
         self.__dict__ |= self.defines._definitions
 
     @staticmethod
-    def from_h_file(h_file_path, includes, defines):
-        region_names = ['header', 'cm', 'bl1_2', 'dm', 'dynamic', 'soc']
-
-        make_region = lambda x: c_struct.C_struct.from_h_file(h_file_path,
-                                                              "rse_otp_{}_area_t".format(x),
-                                                              includes, defines)
+    def from_h_file(h_file_path, compiler, includes, defines):
+        make_region = lambda x: C_struct.from_h_file(h_file_path,
+                                                    "rse_otp_{}_area_t".format(x),
+                                                    compiler,
+                                                    includes, defines)
         regions = [make_region(x) for x in region_names]
 
-        for r,n in zip(regions, region_names):
+        for r, n in zip(regions, region_names):
             r.name = n
 
-        config = c_macro.C_macro.from_h_file(h_file_path, includes, defines)
+        regions = {r.name: r for r in regions}
 
-        return OTP_config(*regions, config)
+        config = C_macro.from_h_file(h_file_path, includes, defines)
+
+        return OTP_config(defines=config, **regions)
 
     @staticmethod
-    def from_config_file(file_path):
-        with open(file_path, "rb") as f:
-            return pickle.load(f)
+    def from_config_file(file):
+        if isinstance(file, str):
+            assert isfile(file), "File {} does not exist".format(file)
+            file = open(file, "rb")
+
+        return pickle.load(file)
+
+    def __str__(self):
+        out = ""
+        for r in region_names:
+            out += str(getattr(self, r)) + "\n\n"
+        return out[:-2]
 
     def set_cm_offsets_automatically(self,
                                      dm_sets_dm_and_dynamic_area_size : bool = None
@@ -118,60 +99,38 @@ class OTP_config:
     def set_dm_offsets_automatically(self):
         self.set_cm_offsets_automatically(False)
 
-    def to_config_file(self, file_path):
-        with open(file_path, "wb") as f:
-            pickle.dump(self, f)
+    def to_config_file(self, file):
+        if isinstance(file, str):
+            dir = dirname(file)
+            if not dir:
+                dir = "."
+            assert isdir(dir), "Directory {} does not exist to create file ".format(dir)
+            file = open(file, "wb")
+        pickle.dump(self, file)
 
     def set_value_from_bytes(self, b):
         self.header.set_value_from_bytes(b[:self.header._size])
 
-        for r in self_regions[1:]:
+        for r in region_names[1:-1]:
             offset = getattr(self.header, "{}_area_info".format(r)).offset.get_value()
             size = getattr(self.header, "{}_area_info".format(r)).size.get_value()
 
             if (offset and size):
-                getattr(self, x).set_value_from_bytes(b[offset:offset + size])
+                getattr(self, r).set_value_from_bytes(b[offset:offset + size])
+
+        offset = self.header.dynamic_area_info.offset.get_value()
+        self.dynamic.set_value_from_bytes(b[offset:offset+self.dynamic._size])
 
     def to_bytes(self):
         b = self.header.to_bytes()
         b += bytes(16384 - len(b))
         b = bytearray(b)
 
-        for r in self_regions[1:]:
+        for r in region_names[1:]:
             offset = getattr(self.header, "{}_area_info".format(r)).offset.get_value()
             size = getattr(self.header, "{}_area_info".format(r)).size.get_value()
 
             if (offset and size):
-                b[offset:offset + size] = getattr(self, x).to_bytes()
+                b[offset:offset + size] = getattr(self, r).to_bytes()
 
         return b
-
-script_description = """
-This script takes an instance of rse_otp_layout.h and a set of definitions
-(extracted from compile_commands.json), and creates a config file which
-corresponds to the OTP layout defined by those two, which can then be used to
-create binary OTP images, or to allow other scripts to access the OTP
-configuration options.
-"""
-if __name__ == "__main__":
-    import argparse
-    import c_include
-
-    parser = argparse.ArgumentParser(allow_abbrev=False,
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                     description=script_description)
-    parser.add_argument("--rse_otp_layout_h_file", help="path to rse_otp_layout.h", required=True)
-    parser.add_argument("--compile_commands_file", help="path to compile_commands.json", required=True)
-    parser.add_argument("--otp_config_output_file", help="file to output otp config to", required=True)
-    parser.add_argument("--log_level", help="log level", required=False, default="ERROR", choices=logging._levelToName.values())
-
-    args = parser.parse_args()
-    logging.getLogger("TF-M").setLevel(args.log_level)
-    logger.addHandler(logging.StreamHandler())
-
-    includes = c_include.get_includes(args.compile_commands_file, "otp_lcm.c")
-    defines = c_include.get_defines(args.compile_commands_file, "otp_lcm.c")
-
-    otp_config = OTP_config.from_h_file(args.rse_otp_layout_h_file, includes, defines)
-
-    otp_config.to_config_file(args.otp_config_output_file)

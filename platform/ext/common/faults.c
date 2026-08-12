@@ -1,9 +1,11 @@
 /*
- * Copyright (c) 2022-2024, Arm Limited. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
  */
+#include "config_tfm.h"
+
 #include "tfm_hal_device_header.h"
 #include "utilities.h"
 /* "exception_info.h" must be the last include because of the IAR pragma */
@@ -19,6 +21,7 @@ void C_HardFault_Handler(void)
     tfm_core_panic();
 }
 
+EXCEPTION_INFO_IAR_REQUIRED
 __attribute__((naked)) void HardFault_Handler(void)
 {
     EXCEPTION_INFO();
@@ -39,6 +42,7 @@ void C_MemManage_Handler(void)
     tfm_core_panic();
 }
 
+EXCEPTION_INFO_IAR_REQUIRED
 __attribute__((naked)) void MemManage_Handler(void)
 {
     EXCEPTION_INFO();
@@ -59,6 +63,7 @@ void C_BusFault_Handler(void)
     tfm_core_panic();
 }
 
+EXCEPTION_INFO_IAR_REQUIRED
 __attribute__((naked)) void BusFault_Handler(void)
 {
     EXCEPTION_INFO();
@@ -79,6 +84,7 @@ void C_SecureFault_Handler(void)
     tfm_core_panic();
 }
 
+EXCEPTION_INFO_IAR_REQUIRED
 __attribute__((naked)) void SecureFault_Handler(void)
 {
     EXCEPTION_INFO();
@@ -94,6 +100,7 @@ void C_UsageFault_Handler(void)
     tfm_core_panic();
 }
 
+EXCEPTION_INFO_IAR_REQUIRED
 __attribute__((naked)) void UsageFault_Handler(void)
 {
     EXCEPTION_INFO();

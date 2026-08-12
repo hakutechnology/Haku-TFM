@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, The TrustedFirmware-M Contributors. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -29,7 +29,7 @@
 #define CC3XX_CONFIG_AES_CTR_ENABLE
 
 /* Whether the AES ECB support is enabled */
-/* #define CC3XX_CONFIG_AES_ECB_ENABLE */
+#define CC3XX_CONFIG_AES_ECB_ENABLE
 
 /* Whether the AES CBC support is enabled */
 /* #define CC3XX_CONFIG_AES_CBC_ENABLE */
@@ -39,7 +39,7 @@
 /* #define CC3XX_CONFIG_AES_GCM_VARIABLE_IV_ENABLE */
 
 /* Whether the AES CMAC support is enabled */
-/* #define CC3XX_CONFIG_AES_CMAC_ENABLE */
+#define CC3XX_CONFIG_AES_CMAC_ENABLE
 
 /* Whether the AES CCM support is enabled */
 #define CC3XX_CONFIG_AES_CCM_ENABLE
@@ -59,6 +59,9 @@
 
 /* Whether CHACHA_POLY1305 is enabled */
 /* #define CC3XX_CONFIG_CHACHA_POLY1305_ENABLE */
+
+/* Whether platform DMA prologue/epilogue hooks are enabled */
+#define CC3XX_CONFIG_DMA_HOOKS_ENABLE
 
 /* Whether DMA remapping is enabled */
 #define CC3XX_CONFIG_DMA_REMAP_ENABLE
@@ -86,9 +89,9 @@
 /* #define CC3XX_CONFIG_TRNG_DMA */
 
 /* Whether RNG uses HMAC_DRBG when RNG_DRBG is selected */
-#define CC3XX_CONFIG_RNG_DRBG_HMAC
+/* #define CC3XX_CONFIG_RNG_DRBG_HMAC */
 /* Whether RNG uses CTR_DRBG when RNG_DRBG is selected */
-/* #define CC3XX_CONFIG_RNG_DRBG_CTR */
+#define CC3XX_CONFIG_RNG_DRBG_CTR
 /* Whether RNG uses HASH_DRBG when RNG_DRBG is selected */
 /* #define CC3XX_CONFIG_RNG_DRBG_HASH */
 
@@ -139,6 +142,19 @@
 #ifndef CC3XX_CONFIG_RNG_RING_OSCILLATOR_ID
 #define CC3XX_CONFIG_RNG_RING_OSCILLATOR_ID 0
 #endif /* !CC_RNG_RING_OSCILLATOR_ID */
+
+/* Build time configuration for the SP800-90B continuous health tests */
+#ifndef CC3XX_CONFIG_ENTROPY_HIGH_THRESHOLD
+#define CC3XX_CONFIG_ENTROPY_HIGH_THRESHOLD (821UL)
+#endif /* CC3XX_CONFIG_ENTROPY_HIGH_THRESHOLD */
+
+#ifndef CC3XX_CONFIG_ENTROPY_REPETITION_COUNT
+#define CC3XX_CONFIG_ENTROPY_REPETITION_COUNT (81UL)
+#endif /* CC3XX_CONFIG_ENTROPY_REPETITION_COUNT */
+
+#ifndef CC3XX_CONFIG_ENTROPY_WINDOW_SIZE
+#define CC3XX_CONFIG_ENTROPY_WINDOW_SIZE (1024UL)
+#endif /* CC3XX_CONFIG_ENTROPY_WINDOW_SIZE */
 
 /* Whether PKA SRAM encryption is supported */
 /* #define CC3XX_CONFIG_PKA_SRAM_ENCRYPTION_SUPPORTED */
@@ -233,5 +249,8 @@
 
 /* Whether the present hardware is a CC310 */
 /* #define CC3XX_CONFIG_HW_VERSION_CC310 */
+
+/* Whether Opaque keys are enabled or not */
+#define CC3XX_CRYPTO_OPAQUE_KEYS
 
 #endif /* CC3XX_CONFIG_H */

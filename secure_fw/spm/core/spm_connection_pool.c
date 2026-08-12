@@ -12,6 +12,7 @@
 
 #include "internal_status_code.h"
 #include "spm.h"
+#include "coverity_check.h"
 #include "tfm_pools.h"
 #include "load/service_defs.h"
 
@@ -65,6 +66,8 @@ psa_handle_t connection_to_handle(struct connection_t *p_connection)
 {
     psa_handle_t handle;
 
+    assert(is_valid_chunk_data_in_pool(connection_pool, (uint8_t *)p_connection));
+
     loop_index = (loop_index + 1) % CONVERSION_FACTOR_VALUE;
     handle = (psa_handle_t)((((uintptr_t)p_connection -
                   (uintptr_t)connection_pool) << CONVERSION_FACTOR_BITOFFSET) +
@@ -101,6 +104,8 @@ struct connection_t *handle_to_connection(psa_handle_t handle)
                     CLIENT_HANDLE_VALUE_MIN) >> CONVERSION_FACTOR_BITOFFSET) +
                     (uintptr_t)connection_pool);
 
+    assert(is_valid_chunk_data_in_pool(connection_pool, (uint8_t *)p_connection));
+
     return p_connection;
 }
 
@@ -117,6 +122,7 @@ void spm_init_connection_space(void)
 
 struct connection_t *spm_allocate_connection(void)
 {
+    TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_11_5, "It's API design to use pointer to void")
     return (struct connection_t *)tfm_pool_alloc(connection_pool);
 }
 

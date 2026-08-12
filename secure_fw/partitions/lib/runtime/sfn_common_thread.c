@@ -21,7 +21,7 @@ void common_sfn_thread(void *param)
 {
     psa_signal_t sig_asserted, signal_mask, sig;
     psa_msg_t msg;
-    struct runtime_metadata_t *meta;
+    const struct runtime_metadata_t *meta;
     service_fn_t *p_sfn_table;
     sfn_init_fn_t sfn_init;
     psa_status_t status;
@@ -32,7 +32,7 @@ void common_sfn_thread(void *param)
     signal_mask = (1UL << meta->n_sfn) - 1;
 
     if (sfn_init && (sfn_init(param) != PSA_SUCCESS)) {
-        ERROR_UNPRIV_RAW("Partition initialization FAILED in 0x%x\n", sfn_init);
+        ERROR_UNPRIV_RAW("Partition initialization FAILED in 0x%x\n", (uintptr_t)sfn_init);
         psa_panic();
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, Arm Limited. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  * Copyright (c) 2022-2023 Cypress Semiconductor Corporation (an Infineon
  * company) or an affiliate of Cypress Semiconductor Corporation. All rights
  * reserved.
@@ -7,10 +7,12 @@
  * SPDX-License-Identifier: BSD-3-Clause
  *
  */
+#include "current.h"
 #include "ffm/psa_api.h"
 #include "spm.h"
 #include "utilities.h"
 #include "tfm_hal_isolation.h"
+#include "coverity_check.h"
 
 size_t tfm_spm_partition_psa_read(psa_handle_t msg_handle, uint32_t invec_idx,
                                   void *buffer, size_t num_bytes)
@@ -18,7 +20,7 @@ size_t tfm_spm_partition_psa_read(psa_handle_t msg_handle, uint32_t invec_idx,
     size_t bytes, remaining;
     struct connection_t *handle = NULL;
     const struct partition_t *curr_partition = GET_CURRENT_COMPONENT();
-    fih_int fih_rc = FIH_FAILURE;
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
 
     /* It is a fatal error if message handle is invalid */
     handle = spm_msg_handle_to_connection(msg_handle);
@@ -56,6 +58,11 @@ size_t tfm_spm_partition_psa_read(psa_handle_t msg_handle, uint32_t invec_idx,
 #endif
 
     remaining = handle->msg.in_size[invec_idx] - handle->invec_accessed[invec_idx];
+    if (remaining > handle->msg.in_size[invec_idx]) {
+        /* underflow */
+        tfm_core_panic();
+    }
+
     /* There was no remaining data in this input vector */
     if (remaining == 0) {
         return 0;
@@ -65,10 +72,11 @@ size_t tfm_spm_partition_psa_read(psa_handle_t msg_handle, uint32_t invec_idx,
      * Copy the client data to the service buffer. It is a fatal error
      * if the memory reference for buffer is invalid or not read-write.
      */
+    TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_11_6, "Intentional pointer cast")
     FIH_CALL(tfm_hal_memory_check, fih_rc,
              curr_partition->boundary, (uintptr_t)buffer,
              num_bytes, TFM_HAL_ACCESS_READWRITE);
-    if (fih_not_eq(fih_rc, fih_int_encode(PSA_SUCCESS))) {
+    if (FIH_NOT_EQ(fih_rc, PSA_SUCCESS)) {
         tfm_core_panic();
     }
 
@@ -125,6 +133,11 @@ size_t tfm_spm_partition_psa_skip(psa_handle_t msg_handle, uint32_t invec_idx,
 #endif
 
     remaining = handle->msg.in_size[invec_idx] - handle->invec_accessed[invec_idx];
+    if (remaining > handle->msg.in_size[invec_idx]) {
+        /* underflow */
+        tfm_core_panic();
+    }
+
     /* There was no remaining data in this input vector */
     if (remaining == 0) {
         return 0;
@@ -149,7 +162,7 @@ psa_status_t tfm_spm_partition_psa_write(psa_handle_t msg_handle, uint32_t outve
 {
     struct connection_t *handle = NULL;
     const struct partition_t *curr_partition = GET_CURRENT_COMPONENT();
-    fih_int fih_rc = FIH_FAILURE;
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
 
     /* It is a fatal error if message handle is invalid */
     handle = spm_msg_handle_to_connection(msg_handle);
@@ -173,11 +186,21 @@ psa_status_t tfm_spm_partition_psa_write(psa_handle_t msg_handle, uint32_t outve
         tfm_core_panic();
     }
 
+    if (handle->outvec_written[outvec_idx] > handle->msg.out_size[outvec_idx]) {
+        /* Should never have written more than expected */
+        tfm_core_panic();
+    }
+
     /*
      * It is a fatal error if the call attempts to write data past the end of
      * the client output vector
      */
     if (num_bytes > (handle->msg.out_size[outvec_idx] - handle->outvec_written[outvec_idx])) {
+        tfm_core_panic();
+    }
+
+    if (num_bytes > handle->msg.out_size[outvec_idx]) {
+        /* underflow */
         tfm_core_panic();
     }
 
@@ -198,10 +221,11 @@ psa_status_t tfm_spm_partition_psa_write(psa_handle_t msg_handle, uint32_t outve
      * Copy the service buffer to client outvecs. It is a fatal error
      * if the memory reference for buffer is invalid or not readable.
      */
+    TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_11_6, "Intentional pointer cast")
     FIH_CALL(tfm_hal_memory_check, fih_rc,
              curr_partition->boundary, (uintptr_t)buffer,
              num_bytes, TFM_HAL_ACCESS_READABLE);
-    if (fih_not_eq(fih_rc, fih_int_encode(PSA_SUCCESS))) {
+    if (FIH_NOT_EQ(fih_rc, PSA_SUCCESS)) {
         tfm_core_panic();
     }
 

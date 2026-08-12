@@ -5,15 +5,31 @@
 #
 #-------------------------------------------------------------------------------
 
+include(CMakePackageConfigHelpers)
+
 install(DIRECTORY ${CMAKE_BINARY_DIR}/bin/
         DESTINATION bin
 )
+
+if(TFM_MERGE_HEX_FILES)
+        # Calculate name of the installed merged hex file and specify path for NS build
+        get_filename_component(TFM_S_HEX_FILNAME "${TFM_S_HEX_FILE_PATH}" NAME)
+        set(TFM_S_HEX_FILE_INSTALL_PATH bin/${TFM_S_HEX_FILNAME})
+
+        install(FILES ${TFM_S_HEX_FILE_PATH}
+                DESTINATION bin)
+endif()
 
 # export veneer lib
 if (CONFIG_TFM_USE_TRUSTZONE)
     install(FILES       ${CMAKE_BINARY_DIR}/secure_fw/s_veneers.o
             DESTINATION ${INSTALL_INTERFACE_LIB_DIR})
 endif()
+
+# export cmake scripts
+install(FILES       ${CMAKE_SOURCE_DIR}/cmake/remote_library.cmake
+                    ${CMAKE_SOURCE_DIR}/cmake/utils.cmake
+        DESTINATION ${INSTALL_CMAKE_DIR})
 
 ####################### export headers #########################################
 
@@ -47,6 +63,8 @@ install(FILES       ${INTERFACE_INC_DIR}/tfm_ns_client_ext.h
 install(FILES       ${CMAKE_SOURCE_DIR}/secure_fw/include/config_tfm.h
         DESTINATION ${INSTALL_INTERFACE_INC_DIR})
 install(FILES       ${CMAKE_SOURCE_DIR}/config/config_base.h
+        DESTINATION ${INSTALL_INTERFACE_INC_DIR})
+install(FILES       ${CMAKE_SOURCE_DIR}/config/coverity_check.h
         DESTINATION ${INSTALL_INTERFACE_INC_DIR})
 install(FILES       ${CMAKE_SOURCE_DIR}/secure_fw/spm/include/tfm_hybrid_platform.h
         DESTINATION ${INSTALL_INTERFACE_INC_DIR})
@@ -82,33 +100,28 @@ if (TFM_PARTITION_INTERNAL_TRUSTED_STORAGE)
 endif()
 
 if (TFM_PARTITION_CRYPTO)
-    install(FILES       ${INTERFACE_INC_DIR}/psa/README.rst
-                        ${INTERFACE_INC_DIR}/psa/build_info.h
-                        ${INTERFACE_INC_DIR}/psa/crypto.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_adjust_auto_enabled.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_adjust_config_dependencies.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_adjust_config_key_pair_types.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_adjust_config_synonyms.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_builtin_composites.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_builtin_key_derivation.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_builtin_primitives.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_compat.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_driver_common.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_driver_contexts_composites.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_driver_contexts_key_derivation.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_driver_contexts_primitives.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_extra.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_legacy.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_platform.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_se_driver.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_sizes.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_struct.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_types.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_values.h
-            DESTINATION ${INSTALL_INTERFACE_INC_DIR}/psa)
+    if (TFM_INSTALL_TF_PSA_CRYPTO_HEADERS)
+        install(FILES       ${INTERFACE_INC_DIR}/psa/README.rst
+                            ${INTERFACE_INC_DIR}/psa/crypto.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_compat.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_driver_common.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_driver_contexts_composites.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_driver_contexts_key_derivation.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_driver_contexts_primitives.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_driver_random.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_extra.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_platform.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_sizes.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_struct.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_types.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_values.h
+                DESTINATION ${INSTALL_INTERFACE_INC_DIR}/psa)
+        install(DIRECTORY   ${INTERFACE_INC_DIR}/mbedtls
+                DESTINATION ${INSTALL_INTERFACE_INC_DIR})
+        install(DIRECTORY   ${INTERFACE_INC_DIR}/tf-psa-crypto
+                DESTINATION ${INSTALL_INTERFACE_INC_DIR})
+    endif()
     install(FILES       ${INTERFACE_INC_DIR}/tfm_crypto_defs.h
-            DESTINATION ${INSTALL_INTERFACE_INC_DIR})
-    install(DIRECTORY   ${INTERFACE_INC_DIR}/mbedtls
             DESTINATION ${INSTALL_INTERFACE_INC_DIR})
 endif()
 
@@ -127,10 +140,25 @@ endif()
 
 if(TFM_PARTITION_FIRMWARE_UPDATE)
     install(FILES       ${INTERFACE_INC_DIR}/psa/update.h
-                        ${CMAKE_BINARY_DIR}/generated/interface/include/psa/fwu_config.h
             DESTINATION ${INSTALL_INTERFACE_INC_DIR}/psa)
     install(FILES       ${INTERFACE_INC_DIR}/tfm_fwu_defs.h
             DESTINATION ${INSTALL_INTERFACE_INC_DIR})
+    if(FWU_DEVICE_CONFIG_FILE)
+        install(FILES       ${FWU_DEVICE_CONFIG_FILE}
+                RENAME      fwu_config.h
+                DESTINATION ${INSTALL_INTERFACE_INC_DIR}/psa)
+    else()
+        install(FILES       ${CMAKE_BINARY_DIR}/generated/interface/include/psa/fwu_config.h
+                DESTINATION ${INSTALL_INTERFACE_INC_DIR}/psa)
+    endif()
+    if(FWU_DEVICE_IMPL_INFO_DEF_FILE)
+        install(FILES       ${FWU_DEVICE_IMPL_INFO_DEF_FILE}
+                RENAME      tfm_fwu_impl_info.h
+                DESTINATION ${INSTALL_INTERFACE_INC_DIR})
+    else()
+        install(FILES       ${INTERFACE_INC_DIR}/tfm_fwu_impl_info.h
+                DESTINATION ${INSTALL_INTERFACE_INC_DIR})
+    endif()
 endif()
 
 if(PLATFORM_DEFAULT_CRYPTO_KEYS)
@@ -200,7 +228,7 @@ if(BL2 AND PLATFORM_DEFAULT_IMAGE_SIGNING)
             PATTERN "scripts/*.py"
             PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
             GROUP_EXECUTE GROUP_READ
-            PATTERN "scripts/wrapper/*.py"
+            PATTERN "scripts/*.py"
             PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
                         GROUP_EXECUTE GROUP_READ)
 
@@ -208,8 +236,17 @@ if(BL2 AND PLATFORM_DEFAULT_IMAGE_SIGNING)
             DESTINATION ${INSTALL_IMAGE_SIGNING_DIR}/scripts)
 
     if (MCUBOOT_ENC_IMAGES)
+        # Specify the MCUBOOT_KEY_ENC path for NS build
+        set(MCUBOOT_INSTALL_KEY_ENC
+            ${INSTALL_IMAGE_SIGNING_DIR}/keys/image_enc_key.pem)
         install(FILES ${MCUBOOT_KEY_ENC}
                 RENAME image_enc_key.pem
+                DESTINATION ${INSTALL_IMAGE_SIGNING_DIR}/keys)
+        # Specify the MCUBOOT_KEY_ENC_NS path for NS build
+        set(MCUBOOT_INSTALL_KEY_ENC_NS
+            ${INSTALL_IMAGE_SIGNING_DIR}/keys/image_enc_ns_key.pem)
+        install(FILES ${MCUBOOT_KEY_ENC_NS}
+                RENAME image_enc_ns_key.pem
                 DESTINATION ${INSTALL_IMAGE_SIGNING_DIR}/keys)
     endif()
 
@@ -224,7 +261,7 @@ if(BL2 AND PLATFORM_DEFAULT_IMAGE_SIGNING)
     install(FILES $<TARGET_FILE_DIR:bl2>/image_s_signing_public_key.pem
             DESTINATION ${INSTALL_IMAGE_SIGNING_DIR}/keys)
 
-    if(MCUBOOT_IMAGE_NUMBER GREATER 1)
+    if(MCUBOOT_IMAGE_NUMBER GREATER 1 OR MCUBOOT_IMAGE_MULTI_SIG_SUPPORT)
         install(FILES $<TARGET_OBJECTS:signing_layout_ns>
                 DESTINATION ${INSTALL_IMAGE_SIGNING_DIR}/layout_files)
         install(FILES ${MCUBOOT_KEY_NS}
@@ -276,7 +313,7 @@ install(FILES ${CMAKE_SOURCE_DIR}/cmake/spe-CMakeLists.cmake
 install(FILES       ${PLATFORM_DIR}/ns/toolchain_ns_GNUARM.cmake
                     ${PLATFORM_DIR}/ns/toolchain_ns_ARMCLANG.cmake
                     ${PLATFORM_DIR}/ns/toolchain_ns_IARARM.cmake
-                    ${PLATFORM_DIR}/ns/toolchain_ns_CLANG.cmake
+                    ${PLATFORM_DIR}/ns/toolchain_ns_ATFE.cmake
         DESTINATION ${INSTALL_CMAKE_DIR})
 
 install(FILES
@@ -284,36 +321,79 @@ install(FILES
         ${PLATFORM_DIR}/include/tfm_plat_ns.h
         DESTINATION ${INSTALL_PLATFORM_NS_DIR}/include)
 
-if (TARGET psa_crypto_config)
-# FIXIT: This is a temporal patch to reduce the change scope and simplify review.
-# In the future we shall decouple this target from tfm_config becuase
-# "psa_crypto_config" target exists not in all configurations.
-# Functionally "psa_crypto_config" provides only include path for Crypto accelerator.
+# Install config files and remap psa_crypto_config definitions to point to them
+if (TFM_INSTALL_TF_PSA_CRYPTO_HEADERS)
+    install(FILES       ${TFM_TF_PSA_CRYPTO_CONFIG_PATH}
+            RENAME      tf_psa_crypto_config.h
+            DESTINATION ${INSTALL_INTERFACE_INC_DIR}/mbedtls)
+endif()
+
+# Install Crypto configuration for non-secure interface
+install(FILES       ${MBEDTLS_PSA_CRYPTO_PLATFORM_FILE}
+        RENAME      tfm_mbedtls_psa_crypto_platform.h
+        DESTINATION ${INSTALL_INTERFACE_INC_DIR}/mbedtls)
+
+target_compile_definitions(psa_crypto_config
+        INTERFACE
+        $<INSTALL_INTERFACE:TFM_PSA_CRYPTO_CLIENT_ONLY>
+        $<INSTALL_INTERFACE:TF_PSA_CRYPTO_CONFIG_FILE="$<INSTALL_PREFIX>/${INSTALL_INTERFACE_INC_DIR}/mbedtls/tf_psa_crypto_config.h">
+        $<INSTALL_INTERFACE:$<$<BOOL:${MBEDTLS_PSA_CRYPTO_PLATFORM_FILE}>:MBEDTLS_PSA_CRYPTO_PLATFORM_FILE="$<INSTALL_PREFIX>/${INSTALL_INTERFACE_INC_DIR}/mbedtls/tfm_mbedtls_psa_crypto_platform.h">>)
+
+# Install config files and remap tfm_config definitions to point to them
+if(PROJECT_CONFIG_HEADER_FILE)
+        install(FILES       ${PROJECT_CONFIG_HEADER_FILE}
+                RENAME      config_tfm_project.h
+                DESTINATION ${INSTALL_INTERFACE_INC_DIR})
+
+        target_compile_definitions(tfm_config
+                INTERFACE
+                $<INSTALL_INTERFACE:PROJECT_CONFIG_HEADER_FILE="$<INSTALL_PREFIX>/${INSTALL_INTERFACE_INC_DIR}/config_tfm_project.h">)
+endif()
+
+if(EXISTS ${TARGET_CONFIG_HEADER_FILE})
+        # TF-M looks for this file with a fixed name
+        install(FILES       ${TARGET_CONFIG_HEADER_FILE}
+                DESTINATION ${INSTALL_INTERFACE_INC_DIR})
+
+        target_compile_definitions(tfm_config
+                INTERFACE
+                $<INSTALL_INTERFACE:TARGET_CONFIG_HEADER_FILE="$<INSTALL_PREFIX>/${INSTALL_INTERFACE_INC_DIR}/config_tfm_target.h">)
+endif()
+
 install(TARGETS tfm_config psa_crypto_config psa_interface
         DESTINATION ${CMAKE_INSTALL_PREFIX}
-        EXPORT tfm-config
-        )
-else()
-        install(TARGETS tfm_config psa_interface
-        DESTINATION ${CMAKE_INSTALL_PREFIX}
-        EXPORT tfm-config
-        )
-endif()
+        EXPORT tfm-config)
 
 target_include_directories(psa_interface
         INTERFACE
-        $<INSTALL_INTERFACE:interface/include>
-        )
+        $<INSTALL_INTERFACE:interface/include>)
 
 install(EXPORT tfm-config
         FILE spe_export.cmake
         DESTINATION ${INSTALL_CMAKE_DIR})
 
-configure_file(${CMAKE_SOURCE_DIR}/config/spe_config.cmake.in
-               ${INSTALL_CMAKE_DIR}/spe_config.cmake @ONLY)
+# Pass empty variables to PATH_VARS if they aren't defined
+set(TFM_S_HEX_FILE_INSTALL_PATH "${TFM_S_HEX_FILE_INSTALL_PATH}")
+set(MCUBOOT_INSTALL_KEY_ENC     "${MCUBOOT_INSTALL_KEY_ENC}")
+set(MCUBOOT_INSTALL_KEY_ENC_NS  "${MCUBOOT_INSTALL_KEY_ENC_NS}")
+set(MCUBOOT_INSTALL_KEY_S       "${MCUBOOT_INSTALL_KEY_S}")
+set(MCUBOOT_INSTALL_KEY_NS      "${MCUBOOT_INSTALL_KEY_NS}")
+configure_package_config_file(${CMAKE_SOURCE_DIR}/config/spe_config.cmake.in
+                              ${CMAKE_BINARY_DIR}/generated/cmake/spe_config.cmake
+        INSTALL_DESTINATION ${INSTALL_CMAKE_DIR}
+        PATH_VARS MCUBOOT_INSTALL_KEY_ENC
+                  MCUBOOT_INSTALL_KEY_ENC_NS
+                  MCUBOOT_INSTALL_KEY_S
+                  MCUBOOT_INSTALL_KEY_NS
+                  TFM_S_HEX_FILE_INSTALL_PATH)
+
+install(FILES       ${CMAKE_BINARY_DIR}/generated/cmake/spe_config.cmake
+        DESTINATION ${INSTALL_CMAKE_DIR})
 
 # Toolchain utils
 install(FILES
         cmake/set_extensions.cmake
         cmake/mcpu_features.cmake
+        cmake/imported_target.cmake
+        cmake/hex_generator.cmake
         DESTINATION ${INSTALL_CMAKE_DIR})

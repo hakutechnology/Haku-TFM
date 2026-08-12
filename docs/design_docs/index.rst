@@ -5,7 +5,7 @@ Design Documents
     :maxdepth: 2
 
     Secure Boot     <booting/index>
-    Dual CPU        <dual-cpu/index>
+    Multi CPU       <multi-cpu/index>
     Secure Services <services/index>
     Software Design <software/index>
 
@@ -16,6 +16,7 @@ Design Documents
     Builtin Keys               <tfm_builtin_keys.rst>
     Logging system             <tfm_log_system_design_document.rst>
     Physical Attack Mitigation <tfm_physical_attack_mitigation.rst>
+    MM-IOVEC High Isol Levels  <mm_iovec.rst>
 
 --------------
 

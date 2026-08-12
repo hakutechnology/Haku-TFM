@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025, Arm Limited. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -22,8 +22,15 @@
 #include "platform_regs.h"
 #include "sam_reg_map.h"
 #include "tfm_log.h"
+#include "fih.h"
 
-#include "mbedtls/hmac_drbg.h"
+#include "mbedtls/private/hmac_drbg.h"
+#include "mbedtls/memory_buffer_alloc.h"
+
+#define BL1_MBEDTLS_MEM_BUF_LEN 0x2000
+
+/* Static buffer to be used by mbedtls for memory allocation */
+static uint8_t mbedtls_mem_buf[BL1_MBEDTLS_MEM_BUF_LEN];
 
 REGION_DECLARE(Image$$, ARM_LIB_STACK, $$ZI$$Base);
 
@@ -40,7 +47,6 @@ static mbedtls_hmac_drbg_context hmac_drbg_ctx;
 static int32_t __bl1_random_generate_secure_init(void)
 {
     int error;
-    size_t hash_bytes_used = 0;
     uint8_t entropy_seed[64];
 
     const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
@@ -139,6 +145,14 @@ int32_t boot_platform_init(void)
                             (struct mps4_corstone3xx_sysctrl_t *)MPS4_CORSTONE3XX_SYSCTRL_BASE_S;
     sysctrl->reset_mask |= SYSCTRL_RESET_MASK_CPU0RSTREQEN_MASK;
 
+
+    /*
+     * Initialise the mbedtls static memory allocator so that mbedtls allocates
+     * memory from the provided static buffer instead of from the heap.
+     */
+    mbedtls_memory_buffer_alloc_init(mbedtls_mem_buf, BL1_MBEDTLS_MEM_BUF_LEN);
+
+
     plat_err = tfm_plat_otp_init();
     if (plat_err != TFM_PLAT_ERR_SUCCESS) {
         return 1;
@@ -175,7 +189,7 @@ int32_t boot_platform_post_init(void)
 
 int boot_platform_pre_load(uint32_t image_id)
 {
-    kmu_random_delay(&KMU_DEV_S, KMU_DELAY_LIMIT_32_CYCLES);
+    (void)fih_delay();
 
     return 0;
 }
@@ -193,7 +207,7 @@ void boot_platform_start_next_image(struct boot_arm_vector_table *vt)
     stdio_uninit();
 #endif /* (LOG_LEVEL > LOG_LEVEL_NONE) || defined(TEST_BL1_1) || defined(TEST_BL1_2) */
 
-    kmu_random_delay(&KMU_DEV_S, KMU_DELAY_LIMIT_32_CYCLES);
+    (void)fih_delay();
 
     vt_cpy = vt;
 

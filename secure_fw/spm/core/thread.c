@@ -41,6 +41,9 @@ struct thread_t *thrd_next(void)
     struct critical_section_t cs_signal = CRITICAL_SECTION_STATIC_INIT;
 
     CRITICAL_SECTION_ENTER(cs_signal);
+
+    assert(query_state_cb != NULL);
+
     /*
      * First runnable thread has highest priority since threads are
      * sorted by priority.
@@ -118,6 +121,8 @@ void thrd_set_state(struct thread_t *p_thrd, uint32_t new_state)
 uint32_t thrd_start_scheduler(struct thread_t **ppth)
 {
     struct thread_t *pth = thrd_next();
+
+    assert(pth != NULL);
 
     arch_attempt_schedule();
 

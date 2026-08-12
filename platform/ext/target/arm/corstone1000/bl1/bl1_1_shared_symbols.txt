@@ -1,7 +1,6 @@
 Driver_FLASH0
 Driver_FLASH1
 SystemInit
-bl1_aes_256_ctr_decrypt
 bl1_derive_key
 bl1_get_active_bl2_image
 bl1_otp_read_key
@@ -16,6 +15,14 @@ computed_bl1_2_hash
 corstone1000_watchdog_reset_timer
 pq_crypto_verify
 pq_crypto_get_pub_key_hash
+psa_hash_compute
+psa_import_key
+psa_cipher_decrypt_setup
+psa_cipher_set_iv
+psa_cipher_update
+psa_cipher_abort
+psa_cipher_finish
+psa_destroy_key
 stdio_init
 stdio_output_string
 stdio_uninit

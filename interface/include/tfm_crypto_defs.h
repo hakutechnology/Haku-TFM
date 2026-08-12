@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, Arm Limited. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -85,8 +85,8 @@ enum tfm_crypto_group_id_t {
 
 #define KEY_MANAGEMENT_FUNCS                       \
     X(TFM_CRYPTO_GET_KEY_ATTRIBUTES)               \
-    X(TFM_CRYPTO_OPEN_KEY)                         \
-    X(TFM_CRYPTO_CLOSE_KEY)                        \
+    X(TFM_CRYPTO_ABANDONED_OPEN_KEY)               \
+    X(TFM_CRYPTO_ABANDONED_CLOSE_KEY)              \
     X(TFM_CRYPTO_IMPORT_KEY)                       \
     X(TFM_CRYPTO_DESTROY_KEY)                      \
     X(TFM_CRYPTO_EXPORT_KEY)                       \
@@ -103,7 +103,8 @@ enum tfm_crypto_group_id_t {
     X(TFM_CRYPTO_HASH_CLONE)                       \
     X(TFM_CRYPTO_HASH_FINISH)                      \
     X(TFM_CRYPTO_HASH_VERIFY)                      \
-    X(TFM_CRYPTO_HASH_ABORT)
+    X(TFM_CRYPTO_HASH_ABORT)                       \
+    X(TFM_CRYPTO_CAN_DO_HASH)
 
 #define MAC_FUNCS                                  \
     X(TFM_CRYPTO_MAC_COMPUTE)                      \
@@ -124,7 +125,8 @@ enum tfm_crypto_group_id_t {
     X(TFM_CRYPTO_CIPHER_SET_IV)                    \
     X(TFM_CRYPTO_CIPHER_UPDATE)                    \
     X(TFM_CRYPTO_CIPHER_FINISH)                    \
-    X(TFM_CRYPTO_CIPHER_ABORT)
+    X(TFM_CRYPTO_CIPHER_ABORT)                     \
+    X(TFM_CRYPTO_CAN_DO_CIPHER)
 
 #define AEAD_FUNCS                                 \
     X(TFM_CRYPTO_AEAD_ENCRYPT)                     \

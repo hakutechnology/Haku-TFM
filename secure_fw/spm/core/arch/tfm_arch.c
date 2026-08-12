@@ -5,12 +5,14 @@
  *
  */
 
-#include "compiler_ext_defs.h"
 #include "security_defs.h"
 #include "tfm_arch.h"
 #include "tfm_core_trustzone.h"
 #include "utilities.h"
 #include "config_impl.h"
+#include "coverity_check.h"
+
+#include "compiler_ext_defs.h" /* Keep last. */
 
 #if defined(__ICCARM__) && (CONFIG_TFM_FLOAT_ABI >= 1)
 #pragma required = tfm_arch_clear_fp_data
@@ -160,6 +162,7 @@ void tfm_arch_init_context(struct context_ctrl_t *p_ctx_ctrl,
 
     spm_memset(p_tctx, 0, sizeof(*p_tctx));
 
+    TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_11_6, "Intentional pointer cast")
     ARCH_CTXCTRL_EXCRET_PATTERN(&p_tctx->stat_ctx, param, 0, 0, 0, pfn, pfnlr);
 
     p_ctx_ctrl->exc_ret  = EXC_RETURN_THREAD_PSP;

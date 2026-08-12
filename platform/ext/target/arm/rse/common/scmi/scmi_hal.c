@@ -4,26 +4,27 @@
  *
  */
 
+#include "atu_config.h"
+#include "atu_rse_lib.h"
 #include "scmi_hal.h"
 #include "device_definition.h"
 #include "host_base_address.h"
+#include "tfm_utils.h"
+
+#if !defined(TEST_S_SCMI_COMMS)
+#include "scmi_plat_defs.h"
+#endif
 
 /* TODO: Make these configurable */
-#define SCP_SHARED_MEMORY_ATU_REGION 16U
 #define SCP_MHU_DOORBELL_CHANNEL 2U
-
-#define RSE_ATU_PAGE_SIZE 0x2000U
-
-#define ALIGN_UP(num, align) (((num) + ((align) - 1)) & ~((align) - 1))
 
 scmi_comms_err_t scmi_hal_shared_memory_init(void)
 {
     enum atu_error_t err;
 
-    err = atu_initialize_region(&ATU_DEV_S, SCP_SHARED_MEMORY_ATU_REGION,
-                                SCP_SHARED_MEMORY_BASE,
-                                SCP_SHARED_MEMORY_PHYS_BASE,
-                                ALIGN_UP(SCP_SHARED_MEMORY_SIZE, RSE_ATU_PAGE_SIZE));
+    err = atu_rse_map_addr_to_log_addr(&ATU_LIB_S, SCP_SHARED_MEMORY_PHYS_BASE,
+                                       SCP_SHARED_MEMORY_BASE, ALIGN_UP(SCP_SHARED_MEMORY_SIZE,
+                                       RSE_ATU_PAGE_SIZE), 0);
     if (err != ATU_ERR_NONE) {
         return SCMI_COMMS_HARDWARE_ERROR;
     }
@@ -105,4 +106,21 @@ scmi_comms_err_t scmi_hal_doorbell_clear(void)
     }
 
     return SCMI_COMMS_SUCCESS;
+}
+
+scmi_comms_err_t scmi_hal_init_sequence_flags(
+    scmi_init_sequence_flags_t *init_flags)
+{
+    (void)init_flags;
+    return SCMI_COMMS_SUCCESS;
+}
+
+scmi_comms_err_t scmi_hal_init_sequence_hook(bool *hook_done)
+{
+    if (hook_done == NULL) {
+        return SCMI_COMMS_INVALID_ARGUMENT;
+    } else {
+        *hook_done = true;
+        return SCMI_COMMS_SUCCESS;
+    }
 }

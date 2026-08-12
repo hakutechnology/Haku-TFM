@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, Arm Limited. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  * Copyright (c) 2022-2024 Cypress Semiconductor Corporation (an Infineon
  * company) or an affiliate of Cypress Semiconductor Corporation. All rights
  * reserved.
@@ -10,11 +10,13 @@
 
 #include "config_impl.h"
 #include "critical_section.h"
+#include "current.h"
 #include "ffm/backend.h"
 #include "ffm/psa_api.h"
 #include "tfm_hal_isolation.h"
 #include "tfm_psa_call_pack.h"
 #include "utilities.h"
+#include "coverity_check.h"
 
 psa_status_t spm_associate_call_params(struct connection_t *p_connection,
                                        uint32_t            ctrl_param,
@@ -24,7 +26,7 @@ psa_status_t spm_associate_call_params(struct connection_t *p_connection,
     psa_invec  ivecs_local[PSA_MAX_IOVEC];
     psa_outvec ovecs_local[PSA_MAX_IOVEC];
     int        i, j;
-    fih_int    fih_rc      = FIH_FAILURE;
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
     uint32_t   ns_access   = 0;
     size_t     ivec_num    = PARAM_UNPACK_IN_LEN(ctrl_param);
     size_t     ovec_num    = PARAM_UNPACK_OUT_LEN(ctrl_param);
@@ -61,7 +63,7 @@ psa_status_t spm_associate_call_params(struct connection_t *p_connection,
     FIH_CALL(tfm_hal_memory_check, fih_rc,
              curr_partition->boundary, (uintptr_t)inptr,
              ivec_num * sizeof(psa_invec), TFM_HAL_ACCESS_READABLE | ns_access);
-    if (fih_not_eq(fih_rc, fih_int_encode(PSA_SUCCESS))) {
+    if (FIH_NOT_EQ(fih_rc, PSA_SUCCESS)) {
         return PSA_ERROR_PROGRAMMER_ERROR;
     }
 
@@ -76,7 +78,7 @@ psa_status_t spm_associate_call_params(struct connection_t *p_connection,
     FIH_CALL(tfm_hal_memory_check, fih_rc,
              curr_partition->boundary, (uintptr_t)outptr,
              ovec_num * sizeof(psa_outvec), TFM_HAL_ACCESS_READWRITE | ns_access);
-    if (fih_not_eq(fih_rc, fih_int_encode(PSA_SUCCESS))) {
+    if (FIH_NOT_EQ(fih_rc, PSA_SUCCESS)) {
         return PSA_ERROR_PROGRAMMER_ERROR;
     }
 
@@ -89,6 +91,14 @@ psa_status_t spm_associate_call_params(struct connection_t *p_connection,
      * Overflow is checked in tfm_hal_memory_check functions.
      */
     for (i = 0; (i + 1) < ivec_num; i++) {
+        /* Validate arithmetic overflow for the input vectors */
+        TFM_COVERITY_DEVIATE_BLOCK(MISRA_C_2023_Rule_11_6, "Intentional pointer cast")
+        if ((uintptr_t)ivecs_local[i].base + ivecs_local[i].len <
+            (uintptr_t)ivecs_local[i].base) {
+            return PSA_ERROR_PROGRAMMER_ERROR;
+        }
+        TFM_COVERITY_BLOCK_END(MISRA_C_2023_Rule_11_6)
+
         for (j = i + 1; j < ivec_num; j++) {
             if (!((((char *) ivecs_local[j].base + ivecs_local[j].len) <=
                   (char *) ivecs_local[i].base) ||
@@ -113,10 +123,11 @@ psa_status_t spm_associate_call_params(struct connection_t *p_connection,
      * memory reference was invalid or not readable.
      */
     for (i = 0; i < ivec_num; i++) {
+        TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_11_6, "Intentional pointer cast")
         FIH_CALL(tfm_hal_memory_check, fih_rc,
                  curr_partition->boundary, (uintptr_t)ivecs_local[i].base,
                  ivecs_local[i].len, TFM_HAL_ACCESS_READABLE | ns_access);
-        if (fih_not_eq(fih_rc, fih_int_encode(PSA_SUCCESS))) {
+        if (FIH_NOT_EQ(fih_rc, PSA_SUCCESS)) {
             return PSA_ERROR_PROGRAMMER_ERROR;
         }
 
@@ -136,10 +147,11 @@ psa_status_t spm_associate_call_params(struct connection_t *p_connection,
      * payload memory reference was invalid or not read-write.
      */
     for (i = 0; i < ovec_num; i++) {
+        TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_11_6, "Intentional pointer cast")
         FIH_CALL(tfm_hal_memory_check, fih_rc,
                  curr_partition->boundary, (uintptr_t)ovecs_local[i].base,
                  ovecs_local[i].len, TFM_HAL_ACCESS_READWRITE | ns_access);
-        if (fih_not_eq(fih_rc, fih_int_encode(PSA_SUCCESS))) {
+        if (FIH_NOT_EQ(fih_rc, PSA_SUCCESS)) {
             return PSA_ERROR_PROGRAMMER_ERROR;
         }
 

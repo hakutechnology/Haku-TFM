@@ -21,13 +21,19 @@
 #include "tfm_attest_iat_defs.h"
 #include "t_cose/t_cose_common.h"
 #include "tfm_crypto_defs.h"
-#include "tfm_log_unpriv.h"
+#include "tfm_log.h"
+#include "tfm_string.h"
+#include "tfm_utils.h"
 
-#if ATTEST_TOKEN_PROFILE_ARM_CCA
-#include "tfm_strnlen.h"
+#if ATTEST_TOKEN_PROFILE_PSA_IOT_1
+#define ATTEST_TOKEN_PROFILE_DEFINITION_STRING "PSA_IOT_PROFILE_1"
+#elif ATTEST_TOKEN_PROFILE_ARM_CCA
+#define ATTEST_TOKEN_PROFILE_DEFINITION_STRING "tag:arm.com,2023:cca_platform#1.0.0"
+#elif ATTEST_TOKEN_PROFILE_PSA_2_0_0
+#define ATTEST_TOKEN_PROFILE_DEFINITION_STRING "tag:psacertified.org,2023:psa#tfm"
+#else
+#error "Attestation token profile is incorrect"
 #endif
-
-#define ARRAY_LENGTH(array) (sizeof(array) / sizeof(*(array)))
 
 /*!
  * \brief Static function to map return values between \ref psa_attest_err_t
@@ -132,7 +138,7 @@ attest_add_all_sw_components(struct attest_token_encode_ctx *token_ctx)
                                         (int64_t)NO_SW_COMPONENT_FIXED_VALUE);
 #else
         /* Mandatory to have SW components claim in the token */
-        ERROR_UNPRIV("[Attest] Boot record is not available\n");
+        ERROR("[Attest] Boot record is not available\n");
         return PSA_ATTEST_ERR_CLAIM_UNAVAILABLE;
 #endif
     }
@@ -233,18 +239,33 @@ attest_add_security_lifecycle_claim(struct attest_token_encode_ctx *token_ctx)
 static enum psa_attest_err_t
 attest_add_profile_definition(struct attest_token_encode_ctx *token_ctx)
 {
+    static const char profile_definition[] = ATTEST_TOKEN_PROFILE_DEFINITION_STRING;
     struct q_useful_buf_c profile;
-    uint8_t buf[PROFILE_DEFINITION_MAX_SIZE];
-    uint32_t size = sizeof(buf);
+    /* Make sure we pass a word aligned buffer as platforms might
+     * access OTP which has alignment requirements
+     */
+    uint32_t buf[ALIGN_UP(PROFILE_DEFINITION_MAX_SIZE + 1, sizeof(uint32_t)) / sizeof(uint32_t)] = {0};
+    uint32_t size = sizeof(buf) - 1;
     enum tfm_plat_err_t err;
 
-    err = tfm_attest_hal_get_profile_definition(&size, buf);
+    err = tfm_attest_hal_get_profile_definition(&size, (uint8_t *)buf);
     if (err != TFM_PLAT_ERR_SUCCESS) {
         return PSA_ATTEST_ERR_GENERAL;
     }
 
-    profile.ptr = &buf;
+    profile.ptr = buf;
     profile.len = size;
+
+    /* Check for mismatches between the value returned by HAL and Build options */
+    if (size == 0) {
+        INFO("[Attest] The platform did not return a profile_definition\r\n");
+        profile.ptr = profile_definition;
+        profile.len = sizeof(profile_definition) - 1;
+    } else if (size != (sizeof(profile_definition) - 1) || strncmp(profile_definition, (const char *)buf, size)) {
+        WARN("[Attest] Using a mismatched profile_definition received from the HAL\r\n");
+    }
+
+    INFO("[Attest] Encoding profile_definition (size: %d): %s\r\n", profile.len, (const char *)profile.ptr);
     attest_token_encode_add_tstr(token_ctx,
                                  IAT_PROFILE_DEFINITION,
                                  &profile);
@@ -397,11 +418,11 @@ attest_add_hash_algo_claim(struct attest_token_encode_ctx *token_ctx)
         return PSA_ATTEST_ERR_GENERAL;
     }
 
-    if ((tfm_strnlen(buf, PLATFORM_HASH_ALGO_ID_MAX_SIZE) != size) || (size == 0)) {
+    if ((strnlen(buf, PLATFORM_HASH_ALGO_ID_MAX_SIZE) != size) || (size == 0)) {
         return PSA_ATTEST_ERR_GENERAL;
     }
 
-    hash_algo.ptr = &buf;
+    hash_algo.ptr = buf;
     hash_algo.len = size;
     attest_token_encode_add_tstr(token_ctx,
                                  IAT_PLATFORM_HASH_ALGO_ID,
@@ -492,10 +513,10 @@ static enum psa_attest_err_t attest_get_t_cose_algorithm(
 {
     psa_status_t status;
     psa_key_attributes_t attr;
-    psa_key_handle_t handle = TFM_BUILTIN_KEY_ID_IAK;
+    psa_key_id_t key_id = TFM_BUILTIN_KEY_ID_IAK;
     psa_key_type_t key_type;
 
-    status = psa_get_key_attributes(handle, &attr);
+    status = psa_get_key_attributes(key_id, &attr);
     if (status != PSA_SUCCESS) {
         return PSA_ATTEST_ERR_GENERAL;
     }
@@ -535,7 +556,7 @@ static enum psa_attest_err_t attest_get_t_cose_algorithm(
             return PSA_ATTEST_ERR_GENERAL;
         }
     } else {
-        VERBOSE_UNPRIV_RAW("Attestation: Unexpected key_type for TFM_BUILTIN_KEY_ID_IAK. Key storage may be corrupted!\n");
+        VERBOSE_RAW("Attestation: Unexpected key_type for TFM_BUILTIN_KEY_ID_IAK. Key storage may be corrupted!\n");
         return PSA_ATTEST_ERR_GENERAL;
     }
 
@@ -622,7 +643,7 @@ attest_create_token(struct q_useful_buf_c *challenge,
         goto error;
     }
 
-    for (i = 0; i < ARRAY_LENGTH(claim_query_funcs); ++i) {
+    for (i = 0; i < ARRAY_SIZE(claim_query_funcs); ++i) {
         /* Calling the attest_add_XXX_claim functions */
         attest_err = claim_query_funcs[i](&attest_token_ctx);
         if (attest_err != PSA_ATTEST_ERR_SUCCESS) {

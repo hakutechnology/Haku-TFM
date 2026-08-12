@@ -32,8 +32,10 @@ target_sources(platform_bl1_1
         ./bl1_1_provisioning.c
         $<$<BOOL:${RSE_ENABLE_DCSU_PROVISIONING_COMMS}>:${CMAKE_CURRENT_SOURCE_DIR}/rse_provisioning_comms_dcsu.c>
         ./rse_provisioning_message_handler.c
-        ./rse_provisioning_blob_handler.c
+        ./rse_provisioning_plain_data_handler.c
+        ./rse_provisioning_auth_message_handler.c
         ./rse_provisioning_rotpk.c
+        ./../rse_asn1_encoding.c
         ./rse_provisioning_tci_key.c
         ./rse_provisioning_aes_key.c
         ./rse_provisioning_get_message.c

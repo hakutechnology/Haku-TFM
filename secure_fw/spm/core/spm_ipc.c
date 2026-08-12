@@ -13,7 +13,6 @@
 #include <stdint.h>
 #include <assert.h>
 #include "async.h"
-#include "bitops.h"
 #include "config_impl.h"
 #include "config_spm.h"
 #include "critical_section.h"
@@ -79,7 +78,7 @@ struct connection_t *spm_get_async_replied_handle(struct partition_t *partition)
 struct connection_t *spm_get_handle_by_signal(struct partition_t *p_ptn,
                                               psa_signal_t signal)
 {
-    struct connection_t *p_handle_iter;
+    struct connection_t *p_handle_iter = NULL;
     struct connection_t **pr_handle_iter, **last_found_handle_holder = NULL;
     struct critical_section_t cs_assert = CRITICAL_SECTION_STATIC_INIT;
     uint32_t nr_found_msgs = 0;
@@ -225,6 +224,7 @@ psa_status_t spm_get_idle_connection(struct connection_t **p_connection,
     if (IS_STATIC_HANDLE(handle)) {
         /* Allocate space from handle pool for static handle. */
         index = GET_INDEX_FROM_STATIC_HANDLE(handle);
+        assert(index < STATIC_HANDLE_NUM_LIMIT);
 
         service = stateless_services_ref_tbl[index];
         if (service == NULL) {
@@ -398,7 +398,7 @@ uint32_t tfm_spm_init(void)
 {
     struct partition_t *partition;
     uint32_t service_setting;
-    fih_int fih_rc = FIH_FAILURE;
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
 
     spm_init_connection_space();
 
@@ -425,7 +425,7 @@ uint32_t tfm_spm_init(void)
         /* Bind the partition with platform. */
         FIH_CALL(tfm_hal_bind_boundary, fih_rc, partition->p_ldinf,
                  &partition->boundary);
-        if (fih_not_eq(fih_rc, fih_int_encode(TFM_HAL_SUCCESS))) {
+        if (FIH_NOT_EQ(fih_rc, TFM_HAL_SUCCESS)) {
             tfm_core_panic();
         }
 
@@ -438,7 +438,7 @@ uint32_t tfm_spm_init(void)
      * steps after static initialization of partitions' isolation has been completed.
      */
     FIH_CALL(tfm_hal_post_partition_init_hook, fih_rc);
-    if (fih_not_eq(fih_rc, fih_int_encode(TFM_HAL_SUCCESS))) {
+    if (FIH_NOT_EQ(fih_rc, TFM_HAL_SUCCESS)) {
         tfm_core_panic();
     }
 #endif /* CONFIG_TFM_POST_PARTITION_INIT_HOOK == 1 */

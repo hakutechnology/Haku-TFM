@@ -214,9 +214,7 @@ shown below.
    +--------------------------------------------+------------------------------------+----------------------------------------------------------------------------------------------------+
    | ``TFM_PARTITION_CRYPTO``                   | Enable Crypto service              | ``ON``                                                                                             |
    +--------------------------------------------+------------------------------------+----------------------------------------------------------------------------------------------------+
-   | ``TFM_MBEDCRYPTO_CONFIG_PATH``             | MbedTLS config file path           | ``${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/tfm_mbedcrypto_config_profile_large.h`` |
-   +--------------------------------------------+------------------------------------+----------------------------------------------------------------------------------------------------+
-   | ``TFM_MBEDCRYPTO_PSA_CRYPTO_CONFIG_PATH``  | MbedTLS PSA config file path       | ``${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/crypto_config_profile_large.h``         |
+   | ``TFM_TF_PSA_CRYPTO_CONFIG_PATH``          | TF-PSA-Crypto config file path     | ``${CMAKE_SOURCE_DIR}/lib/ext/tf-psa-crypto/tfpsacrypto_config/crypto_config_profile_large.h``     |
    +--------------------------------------------+------------------------------------+----------------------------------------------------------------------------------------------------+
    | ``TFM_PARTITION_INITIAL_ATTESTATION``      | Enable Initial Attestation service | ``ON``                                                                                             |
    +--------------------------------------------+------------------------------------+----------------------------------------------------------------------------------------------------+
@@ -238,16 +236,14 @@ Crypto Secure Partition
 TF-M Profile Large enables Crypto SP in top-level CMake config file and selects
 all the Crypto modules.
 
-MbedTLS configurations
-^^^^^^^^^^^^^^^^^^^^^^
+TF-PSA-Crypto configurations
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-TF-M Profile Large adds a dedicated MbedTLS config file
-``tfm_mbedcrypto_config_profile_large.h`` and MbedTLS PSA config file
-``crypto_config_profile_large.h`` under
-``/lib/ext/mbedcrypto/mbedcrypto_config`` folder, instead of the common one
-``tfm_mbedcrypto_config_default.h`` and ``crypto_config_default.h`` [7]_.
+TF-M Profile Large adds a dedicated TF-PSA-Crypto config file ``crypto_config_profile_large.h``
+under ``/lib/ext/tf-psa-crypto/tfpsacrypto_config`` folder, instead of the common one
+``crypto_config_default.h`` [7]_.
 
-Major MbedTLS configurations are set as listed below:
+Major cryptographic configurations are set as listed below:
 
     - Enable SHA256, SHA384 and SHA512
     - Enable generic message digest wrappers
@@ -262,10 +258,10 @@ Major MbedTLS configurations are set as listed below:
     - Other configurations required by selected option above
 
 A device/use case can append an extra config header to the Profile Large default
-MbedTLS config file to override the default settings. This can be done by
-setting the ``TFM_MBEDCRYPTO_PLATFORM_EXTRA_CONFIG_PATH`` cmake variable in the
-platform config file ``platform/ext<TFM_PLATFORM>/config.cmake``.
-This cmake variable is a wrapper around the ``MBEDTLS_USER_CONFIG_FILE``
+TF-PSA-Crypto config file to override the default settings. This can be done by
+setting the ``TFM_TF_PSA_CRYPTO_PLATFORM_EXTRA_CONFIG_PATH`` cmake variable in
+the platform config file ``platform/ext<TFM_PLATFORM>/config.cmake``.
+This cmake variable is a wrapper around the ``TF_PSA_CRYPTO_USER_CONFIG_FILE``
 options, but is preferred as it keeps all configuration in cmake.
 
 Internal Trusted Storage configurations
@@ -327,7 +323,7 @@ a platform can add a platform configuration file at
 Test configuration
 ------------------
 
-Some cryptography tests are disabled due to the reduced MbedTLS config.
+Some cryptography tests are disabled due to the reduced cryptographic configuration profile.
 Profile Large specific test configurations are also specified in Profile Large
 top-level CMake config file ``config/profile/profile_large_test.cmake``.
 
@@ -440,4 +436,6 @@ Reference
 
 --------------
 
-*Copyright (c) 2021-2022, Arm Limited. All rights reserved.*
+*SPDX-License-Identifier: BSD-3-Clause*
+
+*SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors*

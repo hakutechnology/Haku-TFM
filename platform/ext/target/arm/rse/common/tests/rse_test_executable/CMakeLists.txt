@@ -61,15 +61,9 @@ target_add_scatter_file(rse_bl1_tests
 
 target_link_options(rse_bl1_tests
     PRIVATE
-        $<$<C_COMPILER_ID:GNU>:-Wl,-Map=${CMAKE_BINARY_DIR}/bin/rse_bl1_tests.map>
+        $<$<C_COMPILER_ID:GNU,Clang>:LINKER:-Map=${CMAKE_BINARY_DIR}/bin/rse_bl1_tests.map>
         $<$<C_COMPILER_ID:ARMClang>:--map>
         $<$<C_COMPILER_ID:IAR>:--map\;${CMAKE_BINARY_DIR}/bin/rse_bl1_tests.map>
-        $<$<C_COMPILER_ID:Clang>:-Wl,-Map=${CMAKE_BINARY_DIR}/bin/rse_bl1_tests.map>
-)
-
-target_link_options(rse_bl1_tests
-    PRIVATE
-        --entry=Reset_Handler
 )
 
 target_sources(rse_bl1_tests
@@ -77,8 +71,12 @@ target_sources(rse_bl1_tests
         ../../device/source/startup_rse_bl.c
         ../../device/source/system_core_init.c
         ./rse_test_executable.c
-        $<$<BOOL:${CONFIG_GNU_SYSCALL_STUB_ENABLED}>:${CMAKE_SOURCE_DIR}/platform/ext/common/syscalls_stub.c>
+        $<$<C_COMPILER_ID:GNU>:${CMAKE_SOURCE_DIR}/platform/ext/common/syscalls_stub.c>
         ../../sam_interrupts.c
+        $<$<C_COMPILER_ID:GNU,Clang>:${CMAKE_SOURCE_DIR}/secure_fw/partitions/lib/runtime/crt_start.c>
+        ${CMAKE_SOURCE_DIR}/secure_fw/partitions/lib/runtime/crt_memcmp.c
+        ${CMAKE_SOURCE_DIR}/secure_fw/shared/crt_memset.c
+        ${CMAKE_SOURCE_DIR}/secure_fw/shared/crt_memcpy.c
 )
 
 target_link_libraries(rse_bl1_tests
@@ -86,6 +84,7 @@ target_link_libraries(rse_bl1_tests
         $<$<BOOL:${TEST_BL1_1}>:bl1_1_tests>
         $<$<BOOL:${TEST_BL1_2}>:bl1_2_tests>
         platform_bl1_1_interface
+        tfm_log
 )
 
 target_compile_definitions(rse_bl1_tests

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, The TrustedFirmware-M Contributors. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -12,6 +12,9 @@
 #include "platform_base_address.h"
 #define CC3XX_CONFIG_BASE_ADDRESS (CC3XX_BASE_S)
 #endif /* CC3XX_CONFIG_BASE_ADDRESS */
+
+/* Whether the DCU apply permission function enforces ICV restriction mask */
+/* #define CC3XX_CONFIG_DCU_ICV_RESTRICTION_MASK_CHECK */
 
 /* Whether uint32_t accesses must be strictly 4-byte aligned */
 /* CC3XX_CONFIG_STRICT_UINT32_T_ALIGNMENT */
@@ -59,6 +62,9 @@
 
 /* Whether CHACHA_POLY1305 is enabled */
 /* #define CC3XX_CONFIG_CHACHA_POLY1305_ENABLE */
+
+/* Whether platform DMA prologue/epilogue hooks are enabled */
+/* #define CC3XX_CONFIG_DMA_HOOKS_ENABLE */
 
 /* Whether DMA remapping is enabled */
 /* #define CC3XX_CONFIG_DMA_REMAP_ENABLE */
@@ -141,6 +147,19 @@
 #ifndef CC3XX_CONFIG_RNG_RING_OSCILLATOR_ID
 #define CC3XX_CONFIG_RNG_RING_OSCILLATOR_ID 0
 #endif /* !CC_RNG_RING_OSCILLATOR_ID */
+
+/* Build time configuration for the SP800-90B continuous health tests */
+#ifndef CC3XX_CONFIG_ENTROPY_HIGH_THRESHOLD
+#define CC3XX_CONFIG_ENTROPY_HIGH_THRESHOLD (821UL)
+#endif /* CC3XX_CONFIG_ENTROPY_HIGH_THRESHOLD */
+
+#ifndef CC3XX_CONFIG_ENTROPY_REPETITION_COUNT
+#define CC3XX_CONFIG_ENTROPY_REPETITION_COUNT (81UL)
+#endif /* CC3XX_CONFIG_ENTROPY_REPETITION_COUNT */
+
+#ifndef CC3XX_CONFIG_ENTROPY_WINDOW_SIZE
+#define CC3XX_CONFIG_ENTROPY_WINDOW_SIZE (1024UL)
+#endif /* CC3XX_CONFIG_ENTROPY_WINDOW_SIZE */
 
 /* How many virtual registers can be allocated in the PKA engine */
 #ifndef CC3XX_CONFIG_PKA_MAX_VIRT_REG_AMOUNT
@@ -226,5 +245,14 @@
 
 /* Whether the present hardware is a CC310 */
 /* #define CC3XX_CONFIG_HW_VERSION_CC310 */
+
+/* Whether LCS logging is enabled */
+#define CC3XX_CONFIG_LCS_LOG_ENABLE */
+
+/* Whether secure debug reset register logging is enabled */
+#define CC3XX_CONFIG_SECURE_DEBUG_RESET_LOG_ENABLE
+
+/* Whether General Purpose Persistent Configuration (GPPC) logging is enabled */
+#define CC3XX_CONFIG_GPPC_LOG_ENABLE
 
 #endif /* CC3XX_CONFIG_H */

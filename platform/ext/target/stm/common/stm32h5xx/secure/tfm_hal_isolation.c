@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, Arm Limited. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  * Copyright (c) 2024 Cypress Semiconductor Corporation (an Infineon
  * company) or an affiliate of Cypress Semiconductor Corporation. All rights
  * reserved.
@@ -12,7 +12,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
-#include "array.h"
+#include "tfm_utils.h"
 #include "tfm_hal_device_header.h"
 #include "Driver_Common.h"
 #include "mmio_defs.h"
@@ -50,7 +50,7 @@ void gtzc_init_cfg(void);
 #define MPU_REGION_NUM                  8
 #define PROT_BOUNDARY_VAL \
     ((1U << HANDLE_ATTR_PRIV_POS) & HANDLE_ATTR_PRIV_MASK)
-    
+
 #ifdef CONFIG_TFM_ENABLE_MEMORY_PROTECT
 static uint32_t n_configured_regions = 0;
 struct mpu_armv8m_dev_t dev_mpu_s = { MPU_BASE };
@@ -421,8 +421,8 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_bind_boundary(
     bool ns_agent;
     uint32_t partition_attrs = 0;
     const struct asset_desc_t *p_asset;
-    struct platform_data_t *plat_data_ptr;
 #if TFM_ISOLATION_LEVEL == 2
+    struct platform_data_t *plat_data_ptr;
     struct mpu_armv8m_region_cfg_t localcfg;
 #endif
 

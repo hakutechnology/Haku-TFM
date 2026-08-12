@@ -44,33 +44,30 @@ Supported Features
 - MISRA testing/documentation
 - Switch to using upstream t_cose
 - Remote Test Infrastructure
+- Supporting multiple clients (Hybrid Platforms)
 
-******
-CQ2'25
-******
-- Supporting multiple clients (Hybrid Platforms) i.e. TF-M supporting multiple on
-  core and off core clients on heterogeneous (e.g. Cortex-A + Cortex-M platforms)
-- TF-M v2.2.0 release
-- Update to Mbed TLS3.6.3
+
+***************
+CQ3'26 / CQ4'26
+***************
+
+Power Management Service support
+Continuous support on platforms additions, bugfixes, hotfixes releases
 
 ******
 Future
 ******
-- Integrate TF-PSACrypto
-- TF-M v2.3.0
-- Image encryption via. PSA Crypto in mcuboot
-- Implement support for multiple clients (Hybrid Platforms) contd.
+- TF-M v2.4.0
+- Fuzz Testing
 - Build System Enhancements - Simplify build scripts
 - TF-M Performance - Further Benchmarking and Optimization
 - Scheduler - Multiple Secure Context Implementation
 - PSA FWU Service Enhancements
 - PSA ADAC Spec - Enhancements and Testing
-- Arm v8.1-M Unprevileged Debug
-- [Secure Storage] Extended PSA APIs
-- [Audit Logs] Secure Storage, Policy Manager
-- PSA FF Lifecycle API
-- Fuzz Testing
+
 
 --------------
 
-*Copyright (c) 2017-2024, Arm Limited. All rights reserved.*
+ *SPDX-License-Identifier: BSD-3-Clause*
+
+ *SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors*

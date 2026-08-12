@@ -24,14 +24,30 @@ endif()
 # At the time of writing there is no systematic way to identify which
 # NVM technology is used by the SoC from the Kconfig, so we just
 # hardcode this information here instead.
-if((NRF_SOC_VARIANT MATCHES "^nrf54l1[05]$") OR (TFM_PLATFORM MATCHES "nordic\_nrf\/nrf54l15dk\_nrf54l1[05]\_cpuapp") OR (PSA_API_TEST_TARGET MATCHES "^nrf54l1[05]$"))
+if((NRF_SOC_VARIANT MATCHES "^nrf54l1[05]$") OR
+   (NRF_SOC_VARIANT MATCHES "^nrf54l[vc]10a?$") OR
+   (NRF_SOC_VARIANT MATCHES "^nrf54lm20[ab]?$") OR
+   (TFM_PLATFORM MATCHES "nordic_nrf/nrf54l15dk_nrf54l1[05]_cpuapp") OR
+   (TFM_PLATFORM MATCHES "nordic_nrf/nrf54l[vc]10dk_nrf54l[vc]10a?_cpuapp") OR
+   (TFM_PLATFORM MATCHES "nordic_nrf/nrf54lm20dk_nrf54lm20[ab]?_cpuapp") OR
+   (PSA_API_TEST_TARGET MATCHES "^nrf54l1[05]$") OR
+   (PSA_API_TEST_TARGET MATCHES "^nrf54l[vc]10a?$") OR
+   (PSA_API_TEST_TARGET MATCHES "^nrf54lm20[ab]?$"))
   # Maybe we only need to check one of these options but these
   # variables keep changing so we check both to be future proof
   set(HAS_RRAMC 1)
   set(HAS_CRACEN 1)
+  set(HAS_KMU 1)
+elseif((NRF_SOC_VARIANT MATCHES "^nrf7120e?$") OR
+       (TFM_PLATFORM MATCHES "nordic_nrf/nrf7120dk_nrf7120e?_cpuapp") OR
+       (PSA_API_TEST_TARGET MATCHES "^nrf7120e?$"))
+  set(HAS_MRAMC 1)
+  set(HAS_CRACEN 1)
+  set(HAS_KMU 1)
 else()
   set(HAS_NVMC 1)
   set(HAS_CRACEN 0)
+  set(HAS_KMU 0)
 endif()
 
 #========================= Platform dependencies ===============================#
@@ -71,7 +87,8 @@ target_include_directories(platform_s
         .
         native_drivers
         ${HAL_NORDIC_PATH}/nrfx
-        ${HAL_NORDIC_PATH}/nrfx/mdk
+        ${HAL_NORDIC_PATH}/nrfx/bsp/stable
+        ${HAL_NORDIC_PATH}/nrfx/bsp/stable/templates
         ${HAL_NORDIC_PATH}/nrfx/drivers/include
         common
         ${PLATFORM_DIR}/..
@@ -87,6 +104,10 @@ endif()
 if(HAS_RRAMC)
   list(APPEND nvm_sources
     ${HAL_NORDIC_PATH}/nrfx/drivers/src/nrfx_rramc.c
+  )
+elseif(HAS_MRAMC)
+  list(APPEND nvm_sources
+    ${HAL_NORDIC_PATH}/nrfx/drivers/src/nrfx_mramc.c
   )
 elseif(HAS_NVMC)
   list(APPEND nvm_sources
@@ -107,6 +128,7 @@ target_sources(platform_s
         $<$<BOOL:${TEST_PSA_API}>:${CMAKE_CURRENT_SOURCE_DIR}/pal_plat_test.c>
         $<$<AND:$<BOOL:${ITS_ENCRYPTION}>,$<NOT:${HAS_CRACEN}>>:${CMAKE_CURRENT_SOURCE_DIR}/tfm_hal_its_encryption.c>
         $<$<AND:$<BOOL:${ITS_ENCRYPTION}>,$<BOOL:${HAS_CRACEN}>>:${CMAKE_CURRENT_SOURCE_DIR}/tfm_hal_its_encryption_cracen.c>
+        $<$<BOOL:${HAS_KMU}>:${HAL_NORDIC_PATH}/nrfx/drivers/src/nrfx_kmu.c>
 )
 
 if (NRF_HW_INIT_RESET_ON_BOOT)
@@ -136,10 +158,47 @@ if(TFM_SPM_LOG_RAW_ENABLED)
             cmsis_drivers/Driver_USART.c
             ${HAL_NORDIC_PATH}/nrfx/drivers/src/nrfx_uarte.c
     )
+endif()
 
+if(TFM_SPM_LOG_RAW_ENABLED OR SECURE_UART1)
     target_compile_definitions(platform_s
         PUBLIC
             NRF_SECURE_UART_INSTANCE=${NRF_SECURE_UART_INSTANCE}
+    )
+endif()
+
+if(SOC_NRF7120_TFM_MRAMC_SERVICE)
+    target_compile_definitions(platform_s
+        PUBLIC
+            SOC_NRF7120_TFM_MRAMC_SERVICE
+    )
+endif()
+
+# nRF7120 disables RAM retention during secure startup. Other platforms need
+# the helper only when the RAM-control service is enabled.
+if(NRF_RAM_CTRL_SERVICE OR target STREQUAL "nrf71")
+    target_sources(platform_s
+        PRIVATE
+            ${HAL_NORDIC_PATH}/nrfx/helpers/nrfx_ram_ctrl.c
+    )
+endif()
+
+# RAM-control service (set by zephyr's -DNRF_RAM_CTRL_SERVICE=ON).
+if(NRF_RAM_CTRL_SERVICE)
+    target_compile_definitions(platform_s
+        PUBLIC
+            TFM_NRF_RAM_CTRL_SERVICE
+    )
+endif()
+
+if(CONFIG_NRF_WIFI_KMU)
+    target_sources(platform_s
+        PRIVATE
+            ${ZEPHYR_NRF_MODULE_DIR}/lib/wifi_kmu/wifi_kmu.c
+    )
+    target_compile_definitions(platform_s
+        PUBLIC
+            CONFIG_NRF_WIFI_KMU=1
     )
 endif()
 
@@ -175,7 +234,8 @@ if(BL2)
         PUBLIC
             .
             ${HAL_NORDIC_PATH}/nrfx
-            ${HAL_NORDIC_PATH}/nrfx/mdk
+            ${HAL_NORDIC_PATH}/nrfx/bsp/stable
+            ${HAL_NORDIC_PATH}/nrfx/bsp/stable/templates
             ${HAL_NORDIC_PATH}/nrfx/drivers/include
             common
         PRIVATE
@@ -208,19 +268,55 @@ target_sources(tfm_spm
         target_cfg.c
         $<$<BOOL:${HAS_RRAMC}>:${CMAKE_CURRENT_SOURCE_DIR}/target_cfg_54l.c>
         $<$<BOOL:${HAS_NVMC}>:${CMAKE_CURRENT_SOURCE_DIR}/target_cfg_53_91.c>
+        $<$<BOOL:${HAS_MRAMC}>:${CMAKE_CURRENT_SOURCE_DIR}/target_cfg_71.c>
         secure_peripherals_defs.c
 )
 
+# Determine the startup file based on SOC variant
+if((NRF_SOC_VARIANT MATCHES "^nrf54l1[05]$") OR
+   (TFM_PLATFORM MATCHES "nordic_nrf/nrf54l15dk_nrf54l1[05]_cpuapp"))
+    # nrf54l10 and nrf54l15 share the same startup file
+    set(startup_file "startup_nrf54lx.c")
+elseif((NRF_SOC_VARIANT MATCHES "^nrf54lm20[ab]?$") OR
+       (TFM_PLATFORM MATCHES "nordic_nrf/nrf54lm20dk_nrf54lm20[ab]?_cpuapp"))
+    # nrf54lm20 has its own startup file
+    set(startup_file "startup_nrf54lm.c")
+elseif((NRF_SOC_VARIANT MATCHES "^nrf54l[vc]10a?$") OR
+       (TFM_PLATFORM MATCHES "nordic_nrf/nrf54l[vc]10dk_nrf54l[vc]10a?_cpuapp"))
+    # nrf54l[vc]10 variants share the same startup file
+    set(startup_file "startup_nrf54lvc.c")
+elseif((NRF_SOC_VARIANT MATCHES "^nrf7120e?$") OR
+       (TFM_PLATFORM MATCHES "nordic_nrf/nrf7120dk_nrf7120e?_cpuapp"))
+    # nrf7120 and nrf7120e share the same startup file
+    set(startup_file "startup_nrf7120.c")
+else()
+    # Default to the original startup file for other targets
+    set(startup_file "startup_${target}.c")
+endif()
+
 target_sources(tfm_s
     PRIVATE
-    $<$<C_COMPILER_ID:GNU>:${CMAKE_CURRENT_SOURCE_DIR}/startup_${target}.c>
+    $<$<C_COMPILER_ID:GNU>:${CMAKE_CURRENT_SOURCE_DIR}/${startup_file}>
 )
+
+if(HAS_RRAMC)
+    target_sources(tfm_s
+        PRIVATE
+        $<$<C_COMPILER_ID:GNU>:${CMAKE_CURRENT_SOURCE_DIR}/startup_nrf54l_common.c>
+    )
+endif()
 
 if(BL2)
     target_sources(bl2
         PRIVATE
-            $<$<C_COMPILER_ID:GNU>:${CMAKE_CURRENT_SOURCE_DIR}/startup_${target}.c>
+            $<$<C_COMPILER_ID:GNU>:${CMAKE_CURRENT_SOURCE_DIR}/${startup_file}>
     )
+    if(HAS_RRAMC)
+        target_sources(bl2
+            PRIVATE
+                $<$<C_COMPILER_ID:GNU>:${CMAKE_CURRENT_SOURCE_DIR}/startup_nrf54l_common.c>
+        )
+    endif()
 endif()
 
 if(NRF_APPROTECT)
@@ -247,7 +343,7 @@ install(FILES       ${PROJECT_BINARY_DIR}/config_nordic_nrf_spe.cmake
 )
 
 install(FILES       startup.c
-                    startup_${target}.c
+                    ${startup_file}
                     nrfx_glue.c
                     pal_plat_test.c
                     pal_plat_test.h
@@ -270,6 +366,13 @@ install(DIRECTORY   native_drivers
                     tests
         DESTINATION ${INSTALL_PLATFORM_NS_DIR}/common/core
 )
+
+if(HAS_RRAMC)
+    install(FILES       startup_nrf54l_common.c
+                        startup_nrf54l_common.h
+            DESTINATION ${INSTALL_PLATFORM_NS_DIR}/common/core
+    )
+endif()
 
 install(FILES       ${PLATFORM_DIR}/ext/common/gcc/tfm_common_ns.ld
         DESTINATION ${INSTALL_PLATFORM_NS_DIR}/linker_scripts)

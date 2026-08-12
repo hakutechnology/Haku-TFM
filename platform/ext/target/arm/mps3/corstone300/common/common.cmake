@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Copyright (c) 2020-2024, Arm Limited. All rights reserved.
+# SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -26,7 +26,7 @@ target_add_scatter_file(tfm_s
     $<$<C_COMPILER_ID:ARMClang>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/armclang/tfm_isolation_s.sct>
     $<$<C_COMPILER_ID:GNU>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/gcc/tfm_isolation_s.ld>
     $<$<C_COMPILER_ID:IAR>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/iar/tfm_isolation_s.icf>
-    $<$<C_COMPILER_ID:Clang>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/llvm/tfm_isolation_s.ld>
+    $<$<C_COMPILER_ID:Clang>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/atfe/tfm_isolation_s.ld>
 )
 
 if(BL2)
@@ -38,7 +38,7 @@ if(BL2)
             $<$<C_COMPILER_ID:ARMClang>:${PLATFORM_DIR}/ext/common/armclang/tfm_common_bl2.sct>
             $<$<C_COMPILER_ID:GNU>:${PLATFORM_DIR}/ext/common/gcc/tfm_common_bl2.ld>
             $<$<C_COMPILER_ID:IAR>:${PLATFORM_DIR}/ext/common/iar/tfm_common_bl2.icf>
-            $<$<C_COMPILER_ID:Clang>:${PLATFORM_DIR}/ext/common/llvm/tfm_common_bl2.ld>
+            $<$<C_COMPILER_ID:Clang>:${PLATFORM_DIR}/ext/common/atfe/tfm_common_bl2.ld>
     )
 
     target_compile_options(bl2_scatter
@@ -139,8 +139,6 @@ target_link_options(platform_s
 target_link_libraries(platform_s
     PUBLIC
         device_definition
-    PRIVATE
-        tfm_sprt # For tfm_strnlen in attest HAL
 )
 
 #========================= Platform BL2 =======================================#
@@ -297,6 +295,6 @@ if(DEFAULT_NS_SCATTER)
     install(FILES       ${PLATFORM_DIR}/ext/common/armclang/tfm_common_ns.sct
                         ${PLATFORM_DIR}/ext/common/gcc/tfm_common_ns.ld
                         ${PLATFORM_DIR}/ext/common/iar/tfm_common_ns.icf
-                        ${PLATFORM_DIR}/ext/common/llvm/tfm_common_ns.ldc
+                        ${PLATFORM_DIR}/ext/common/atfe/tfm_common_ns.ldc
             DESTINATION ${INSTALL_PLATFORM_NS_DIR}/linker_scripts)
 endif()

@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Copyright (c) 2022-2025, Arm Limited. All rights reserved.
+# SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -8,6 +8,7 @@
 cmake_policy(SET CMP0076 NEW)
 set(TC_COMMON_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../common)
 
+# Add RSE common directory to the build
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../common common)
 
 #========================= Platform region defs ===============================#
@@ -16,6 +17,13 @@ target_include_directories(platform_region_defs
     INTERFACE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${TC_COMMON_SOURCE_DIR}
+)
+
+#========================= TF-M platform config ===============================#
+# Path for common TC config: config_tfm_target_tc_common.h
+target_include_directories(tfm_config
+    INTERFACE
+        $<BUILD_INTERFACE:${TC_COMMON_SOURCE_DIR}>
 )
 
 #========================= Platform_s =========================================#
@@ -29,7 +37,8 @@ target_sources(platform_s
         ${PLATFORM_DIR}/ext/target/arm/drivers/flash/strata/spi_strataflashj3_flash_lib.c
         $<$<NOT:$<BOOL:${RSE_DEBUG_UART}>>:${TC_COMMON_SOURCE_DIR}/cmsis_drivers/Driver_USART.c>
         $<$<NOT:$<BOOL:${RSE_DEBUG_UART}>>:${PLATFORM_DIR}/ext/target/arm/drivers/usart/pl011/uart_pl011_drv.c>
-        $<$<BOOL:${TFM_MULTI_CORE_TOPOLOGY}>:${TC_COMMON_SOURCE_DIR}/rse_comms/rse_comms_permissions_hal.c>
+        $<$<BOOL:${TFM_MULTI_CORE_TOPOLOGY}>:${TC_COMMON_SOURCE_DIR}/sfcp/sfcp_permissions_hal.c>
+        $<$<BOOL:${TFM_MULTI_CORE_TOPOLOGY}>:${TC_COMMON_SOURCE_DIR}/sfcp/sfcp_platform.c>
 )
 
 target_include_directories(platform_s
@@ -136,7 +145,7 @@ install(DIRECTORY   device
 install(FILES       ${TC_COMMON_SOURCE_DIR}/rse_memory_sizes.h
                     ${TC_COMMON_SOURCE_DIR}/flash_layout.h
                     ${TC_COMMON_SOURCE_DIR}/host_base_address.h
-                    ${TC_COMMON_SOURCE_DIR}/config_tfm_target_common.h
+                    ${TC_COMMON_SOURCE_DIR}/config_tfm_target_tc_common.h
                     rse_platform_defs.h
         DESTINATION ${INSTALL_PLATFORM_NS_DIR}/partition)
 

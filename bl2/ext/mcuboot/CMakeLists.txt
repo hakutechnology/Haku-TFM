@@ -7,21 +7,37 @@
 
 cmake_minimum_required(VERSION 3.21)
 
+include(hex_generator)
+
 fetch_remote_library(
     LIB_NAME                mcuboot
     LIB_SOURCE_PATH_VAR     MCUBOOT_PATH
-    LIB_PATCH_DIR           ${CMAKE_SOURCE_DIR}/lib/ext/mcuboot
+    LIB_PATCH_DIR           ${MCUBOOT_PATCH_DIR}
     LIB_FORCE_PATCH         ${MCUBOOT_FORCE_PATCH}
     FETCH_CONTENT_ARGS
-        GIT_REPOSITORY      https://github.com/mcu-tools/mcuboot.git
+        GIT_REPOSITORY      ${MCUBOOT_GIT_REMOTE}
         GIT_TAG             ${MCUBOOT_VERSION}
         GIT_PROGRESS        TRUE
-        GIT_SUBMODULES      "${MCUBOOT_SUBMODULES}"
+        GIT_SHALLOW         ${MCUBOOT_GIT_SHALLOW}
+        GIT_SUBMODULES      "docs"
 )
+
+# FIXME: There's a bug in CMake which causes the empty value of GIT_SUBMODULES to be handled
+# incorrectly (https://gitlab.kitware.com/cmake/cmake/-/issues/20579,
+# https://gitlab.kitware.com/cmake/cmake/-/issues/25972). As a result Git submodules are still
+# processed in MCUboot. As a temporary workaround specify the "docs" folder (not containing
+# any submodules) - the fix is available from CMake version 3.31.0,
+# related policy: https://cmake.org/cmake/help/latest/policy/CMP0174.html
 
 add_library(mcuboot_config INTERFACE)
 
-set(MCUBOOT_KEY_ENC "${MCUBOOT_PATH}/enc-rsa2048-pub.pem" CACHE FILEPATH "Path to key with which to encrypt binary")
+if (MCUBOOT_ENCRYPT_KW)
+    set(MCUBOOT_KEY_ENC "${MCUBOOT_PATH}/enc-aeskw-128.b64" CACHE FILEPATH "Path to key with which to encrypt Secure firmware")
+    set(MCUBOOT_KEY_ENC_NS "${MCUBOOT_PATH}/enc-aeskw-128_ns.b64" CACHE FILEPATH "Path to key with which to encrypt non secure firmware")
+else()
+    set(MCUBOOT_KEY_ENC "${MCUBOOT_PATH}/enc-rsa2048-pub.pem" CACHE FILEPATH "Path to key with which to encrypt binary")
+    set(MCUBOOT_KEY_ENC_NS "${MCUBOOT_PATH}/enc-rsa2048-pub.pem" CACHE FILEPATH "Path to key with which to encrypt non secure firmware")
+endif()
 
 # Add/process CBOR encoded measured boot data (MCUBOOT_MEASURED_BOOT) only if
 # the store encoded measurements config is enabled. Otherwise, unencoded
@@ -70,9 +86,11 @@ set(BL2_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/bl2_main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/flash_map_extended.c
     ${CMAKE_CURRENT_SOURCE_DIR}/flash_map_legacy.c
-    $<$<BOOL:${MCUBOOT_ENC_IMAGES}>:${CMAKE_CURRENT_SOURCE_DIR}/keys_enc.c>
-
 )
+
+if(PLATFORM_DEFAULT_IMAGE_ENCRYPTION)
+list(APPEND BL2_SOURCES $<$<BOOL:${MCUBOOT_ENC_IMAGES}>:${CMAKE_CURRENT_SOURCE_DIR}/keys_enc.c>)
+endif()
 
 if(PLATFORM_DEFAULT_ROTPK)
     if(MCUBOOT_BUILTIN_KEY)
@@ -91,8 +109,9 @@ target_compile_definitions(bl2
         MCUBOOT_SIGNATURE_TYPE=${MCUBOOT_SIGNATURE_TYPE}
         $<$<BOOL:${MCUBOOT_BUILTIN_KEY}>:TFM_S_KEY_ID=${TFM_S_KEY_ID}>
         $<$<BOOL:${MCUBOOT_BUILTIN_KEY}>:TFM_NS_KEY_ID=${TFM_NS_KEY_ID}>
-        MCUBOOT_ROTPK_MAX_KEYS_PER_IMAGE=${MCUBOOT_ROTPK_MAX_KEYS_PER_IMAGE}
+        MAX_KEYS_PER_IMAGE=${MCUBOOT_ROTPK_MAX_KEYS_PER_IMAGE}
         $<$<BOOL:${MCUBOOT_IMAGE_MULTI_SIG_SUPPORT}>:MCUBOOT_IMAGE_MULTI_SIG_SUPPORT>
+        $<$<BOOL:${MCUBOOT_IMAGE_BINDING}>:MCUBOOT_IMAGE_BINDING>
         $<$<BOOL:${MCUBOOT_ROTPK_SIGN_POLICY}>:MCUBOOT_ROTPK_SIGN_POLICY>
 )
 
@@ -192,10 +211,9 @@ if (PLATFORM_DEFAULT_IMAGE_SIGNING)
 
     target_compile_options(signing_layout_s
         PRIVATE
-            $<$<C_COMPILER_ID:GNU>:-E\;-xc>
+            $<$<C_COMPILER_ID:GNU,Clang>:-E\;-xc>
             $<$<C_COMPILER_ID:ARMClang>:-E\;-xc>
             $<$<C_COMPILER_ID:IAR>:--preprocess=ns\;$<TARGET_OBJECTS:signing_layout_s>>
-            $<$<C_COMPILER_ID:Clang>:-E\;-xc>
     )
     target_compile_definitions(signing_layout_s
         PRIVATE
@@ -232,6 +250,13 @@ if (PLATFORM_DEFAULT_IMAGE_SIGNING)
         ${CMAKE_CURRENT_BINARY_DIR}/tfm_s_signed.bin
     )
 
+    if(MCUBOOT_IMAGE_BINDING)
+        list(APPEND wrapper_args
+            --extra-tlv "${TLV_METADATA}"
+            --extra-tlv "${TLV_BINDING_TAG}"
+        )
+    endif()
+
     if(MCUBOOT_BUILTIN_KEY)
         set(wrapper_args ${wrapper_args} --psa-key-ids ${TFM_S_KEY_ID})
         if(MCUBOOT_IMAGE_MULTI_SIG_SUPPORT AND PLATFORM_DEFAULT_ROTPK)
@@ -243,14 +268,18 @@ if (PLATFORM_DEFAULT_IMAGE_SIGNING)
         set(wrapper_args ${wrapper_args} -k ${MCUBOOT_KEY_NS})
     endif()
 
+    get_target_property(bin_dir bl2 RUNTIME_OUTPUT_DIRECTORY)
+
     add_custom_command(OUTPUT tfm_s_signed.bin
-        DEPENDS tfm_s_bin signing_layout_s
+        OUTPUT ${bin_dir}/tfm_s_signed.bin
+        DEPENDS ${bin_dir}/tfm_s.bin tfm_s_bin signing_layout_s
         DEPENDS $<IF:$<BOOL:${MCUBOOT_GENERATE_SIGNING_KEYPAIR}>,generated_private_key,>
+        DEPENDS $<$<BOOL:${MCUBOOT_ENC_IMAGES}>:${MCUBOOT_KEY_ENC_NS}>
         WORKING_DIRECTORY ${MCUBOOT_PATH}/scripts
 
         #Sign secure binary image with provided secret key
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/wrapper/wrapper.py ${wrapper_args}
-        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/tfm_s_signed.bin $<TARGET_FILE_DIR:bl2>
+        COMMAND  mcuboot_imagesign_wrapper ${wrapper_args}
+        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/tfm_s_signed.bin ${bin_dir}
     )
 
     set(IMAGE_TYPE "NS_IMAGE")
@@ -260,10 +289,9 @@ if (PLATFORM_DEFAULT_IMAGE_SIGNING)
     add_library(signing_layout_ns OBJECT ${CMAKE_CURRENT_BINARY_DIR}/signing_layout_ns.c)
     target_compile_options(signing_layout_ns
         PRIVATE
-            $<$<C_COMPILER_ID:GNU>:-E\;-xc>
+            $<$<C_COMPILER_ID:GNU,Clang>:-E\;-xc>
             $<$<C_COMPILER_ID:ARMClang>:-E\;-xc>
             $<$<C_COMPILER_ID:IAR>:--preprocess=ns\;$<TARGET_OBJECTS:signing_layout_ns>>
-            $<$<C_COMPILER_ID:Clang>:-E\;-xc>
     )
     target_compile_definitions(signing_layout_ns
         PRIVATE
@@ -281,4 +309,11 @@ if (PLATFORM_DEFAULT_IMAGE_SIGNING)
         DEPENDS tfm_s_signed_bin
     )
 
+    add_convert_to_offset_hex_target(tfm_s_signed
+        INPUT_FILE          ${bin_dir}/tfm_s_signed.bin
+        OFFSET_MACRO_NAME   S_CODE_START
+        INCLUDE_BL2_HEADER  TRUE
+        MIRROR_FILE         $<TARGET_PROPERTY:tfm_s,LINK_DEPENDS>
+        OUTPUT_FILE         ${bin_dir}/tfm_s_signed.hex
+    )
 endif()

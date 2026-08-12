@@ -12,11 +12,13 @@ from collections import Counter
 import os
 import subprocess
 import platform
+import sys
 
 import logging
 logger = logging.getLogger("TF-M.{}".format(__name__))
 
-from rich import inspect
+import argparse
+import tfm_tools.c_include
 
 pad = 4
 
@@ -38,19 +40,57 @@ format_chars = {
     'long double' : 'd',
 }
 
+def get_compiler_system_includes(compiler):
+    """Return include directories discovered from the compiler's verbose search list.
 
-def get_macos_sdk_path():
-    """Get the path to the macOS SDK via xcrun."""
-    try:
-        result = subprocess.run(
-            ['xcrun', '--sdk', 'macosx', '--show-sdk-path'],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        return result.stdout.strip()
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"Failed to get macOS SDK path: {e.stderr}")
+    The function probes ``compiler`` by running it in preprocess-only mode and
+    parsing the ``#include <...> search starts here`` section from the verbose
+    diagnostics. Armclang requires an explicit ``--target`` flag, so that flag is
+    injected automatically when the executable name matches ``armclang``.
+
+    Args:
+        compiler (str): Absolute path to the compiler executable to probe.
+
+    Returns:
+        list[str]: Ordered, de-duplicated list of system include directories
+        emitted by the compiler.
+    """
+    assert os.path.isfile(compiler)
+
+    if os.path.basename(compiler) == "iccarm":
+        return []
+
+    probe_cmd = [compiler]
+
+    # Armclang requires that the target type be specified
+    if os.path.basename(compiler) == "armclang":
+        probe_cmd += ["--target=arm-arm-none-eabi"]
+
+    probe_cmd += ["-E", "-x", "c", "-", "-v"]
+
+    proc = subprocess.run(
+        probe_cmd,
+        input="",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    output = "\n".join([proc.stdout, proc.stderr])
+    includes = []
+    capture = False
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#include <...> search starts here:"):
+            capture = True
+            continue
+        if capture:
+            if stripped == "End of search list.":
+                break
+            clean = stripped.replace(" (framework directory)", "").strip()
+            if os.path.isdir(clean):
+                includes.append(clean)
+    return list(dict.fromkeys(includes))
 
 
 def _c_struct_or_union_from_cl_cursor(cursor, name, f):
@@ -180,8 +220,8 @@ class C_enum:
         self.__dict__.update({m.name:m for m in self._members})
 
     @staticmethod
-    def from_h_file(h_file, name, includes = [], defines = []):
-        return _c_from_h_file(h_file, name, includes, defines, C_enum, cl.CursorKind.ENUM_DECL)
+    def from_h_file(h_file, name, compiler, includes = [], defines = []):
+        return _c_from_h_file(h_file, name, compiler, includes, defines, C_enum, cl.CursorKind.ENUM_DECL)
 
     @staticmethod
     def from_cl_cursor(cursor, name=""):
@@ -261,8 +301,8 @@ class C_array:
         self._size = struct.calcsize(self._get_format_string());
 
     @staticmethod
-    def from_h_file(h_file, name, includes = [], defines = []):
-        return _c_from_h_file(h_file, name, includes, defines, C_array, cl.CursorKind.TYPE_DECL)
+    def from_h_file(h_file, name, compiler, includes = [], defines = []):
+        return _c_from_h_file(h_file, name, compiler, includes, defines, C_array, cl.CursorKind.TYPE_DECL)
 
     @staticmethod
     def from_cl_cursor(cursor, name="", dimensions = []):
@@ -391,8 +431,8 @@ class C_variable:
         self.value = value
 
     @staticmethod
-    def from_h_file(h_file, name, includes = [], defines = []):
-        return _c_from_h_file(h_file, name, includes, defines, C_variable, cl.CursorKind.TYPE_DECL)
+    def from_h_file(h_file, name, compiler, includes = [], defines = []):
+        return _c_from_h_file(h_file, name, compiler, includes, defines, C_variable, cl.CursorKind.TYPE_DECL)
 
     @staticmethod
     def from_cl_cursor(cursor, name=""):
@@ -468,8 +508,8 @@ class C_union:
         self.__dict__.update({f.name:f for f in _c_struct_or_union_get_direct_members(self)})
 
     @staticmethod
-    def from_h_file(h_file, name, includes = [], defines = []):
-        return _c_from_h_file(h_file, name, includes, defines, C_union, cl.CursorKind.UNION_DECL)
+    def from_h_file(h_file, name, compiler, includes = [], defines = []):
+        return _c_from_h_file(h_file, name, compiler, includes, defines, C_union, cl.CursorKind.UNION_DECL)
 
     @staticmethod
     def from_cl_cursor(cursor, name=""):
@@ -542,8 +582,8 @@ class C_struct:
         self.__dict__.update({f.name:f for f in _c_struct_or_union_get_direct_members(self)})
 
     @staticmethod
-    def from_h_file(h_file, name, includes = [], defines = []):
-        return _c_from_h_file(h_file, name, includes, defines, C_struct, cl.CursorKind.STRUCT_DECL)
+    def from_h_file(h_file, name, compiler, includes = [], defines = []):
+        return _c_from_h_file(h_file, name, compiler, includes, defines, C_struct, cl.CursorKind.STRUCT_DECL)
 
     @staticmethod
     def from_cl_cursor(cursor, name=""):
@@ -623,15 +663,22 @@ def _c_from_cl_cursor(cursor, name = ""):
 
     raise NotImplementedError
 
-def _c_from_h_file(h_file, name, includes, defines, f, kind):
+def _c_from_h_file(h_file, name, compiler, includes, defines, f, kind):
     name = name.replace("struct ", "")
     name = name.replace("union ", "")
 
     args = ["-I{}".format(i) for i in includes if os.path.isdir(i)]
-    args += ["-D{}".format(d) for d in defines]
 
-    if platform.system() == 'Darwin':
-        args.extend(['-isysroot', get_macos_sdk_path()])
+    # Use the include directory from the cross-compiler instead
+    # of the host clang
+    if os.path.basename(compiler) != "iccarm":
+        args += ["-nostdinc", "-nostdinc++"]
+        system_includes = get_compiler_system_includes(compiler)
+        for inc in system_includes:
+            assert os.path.isdir(inc)
+            args += ["-isystem", inc]
+
+    args += ["-D{}".format(d) for d in defines]
 
     if not os.path.isfile(h_file):
         return FileNotFoundError
@@ -651,34 +698,33 @@ def _c_from_h_file(h_file, name, includes, defines, f, kind):
     if errors:
         for e in errors:
             print(e)
-        exit(1)
+        sys.exit(1)
 
     if len(t) == 0:
         print("Failed to find {} in {}".format(name, h_file))
-        exit(1)
+        sys.exit(1)
 
     assert(len(t) == 1)
     t = t[0]
 
     return f.from_cl_cursor(t, name)
 
-
-if __name__ == '__main__':
-    import argparse
-    import c_include
-
+def main():
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument("--h_file", help="header file to parse", required=True)
     parser.add_argument("--struct_name", help="struct name to evaluate", required=True)
-    parser.add_argument("--compile_commands_file", help="header file to parse", required=True)
-    parser.add_argument("--c_file_to_mirror_includes_from", help="name of the c file to take", required=True)
+    parser.add_argument("--compile_commands_file", help="path to compile_commands.json", required=True)
+    parser.add_argument("--c_file_to_mirror_includes_from", help="path to c file to take compile_commands includes from", required=True)
     parser.add_argument("--log_level", help="log level", required=False, default="ERROR", choices=logging._levelToName.values())
     args = parser.parse_args()
     logging.getLogger("TF-M").setLevel(args.log_level)
     logger.addHandler(logging.StreamHandler())
 
+    compiler = c_include.get_compiler(args.compile_commands_file, args.c_file_to_mirror_includes_from)
     includes = c_include.get_includes(args.compile_commands_file, args.c_file_to_mirror_includes_from)
     defines = c_include.get_defines(args.compile_commands_file, args.c_file_to_mirror_includes_from)
-
-    s = C_struct.from_h_file(args.h_file, args.struct_name, includes, defines)
+    s = C_struct.from_h_file(args.h_file, args.struct_name, compiler, includes, defines)
     print(s)
+
+if __name__ == '__main__':
+    sys.exit(main())

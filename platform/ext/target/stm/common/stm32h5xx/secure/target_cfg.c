@@ -234,22 +234,50 @@ void enable_ns_clk_config(void)
 /*  set all pin mux to un-secure */
 void pinmux_init_cfg(void)
 {
+#if defined(GPIOA)
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
-  __HAL_RCC_GPIOE_CLK_ENABLE();
-  __HAL_RCC_GPIOF_CLK_ENABLE();
-  __HAL_RCC_GPIOG_CLK_ENABLE();
-  __HAL_RCC_GPIOH_CLK_ENABLE();
   GPIOA_S->SECCFGR = 0x0;
+#endif
+#if defined(GPIOB)
+  __HAL_RCC_GPIOB_CLK_ENABLE();
   GPIOB_S->SECCFGR = 0x0;
+#endif
+#if defined(GPIOC)
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   GPIOC_S->SECCFGR = 0x0;
+#endif
+#if defined(GPIOD)
+  __HAL_RCC_GPIOD_CLK_ENABLE();
   GPIOD_S->SECCFGR = 0x0;
+#endif
+#if defined(GPIOE)
+  __HAL_RCC_GPIOE_CLK_ENABLE();
   GPIOE_S->SECCFGR = 0x0;
+#endif
+#if defined(GPIOF)
+  __HAL_RCC_GPIOF_CLK_ENABLE();
   GPIOF_S->SECCFGR = 0x0;
+#endif
+#if defined(GPIOG)
+  __HAL_RCC_GPIOG_CLK_ENABLE();
   GPIOG_S->SECCFGR = 0x0;
+#endif
+#if defined(GPIOH)
+  __HAL_RCC_GPIOH_CLK_ENABLE();
   GPIOH_S->SECCFGR = 0x0;
+#endif
+#if defined(GPIOI)
+  __HAL_RCC_GPIOI_CLK_ENABLE();
+  GPIOI_S->SECCFGR = 0x0;
+#endif
+#if defined(GPIOJ)
+  __HAL_RCC_GPIOJ_CLK_ENABLE();
+  GPIOJ_S->SECCFGR = 0x0;
+#endif
+#if defined(GPIOK)
+  __HAL_RCC_GPIOK_CLK_ENABLE();
+  GPIOK_S->SECCFGR = 0x0;
+#endif
 
 }
 /*------------------- SAU/IDAU configuration functions -----------------------*/
@@ -390,7 +418,7 @@ static void  gtzc_config_sram(uint32_t base, uint32_t max_size, uint32_t off_sta
   }
   /* compute index to start and to end */
   /* start and end index is on superblock */
-  /* end index is highest supreblock */
+  /* end index is highest superblock */
   for (index = 0; index < (max_size/MPCBB_BLOCK_SIZE); index++)
   {
     /* clean register on index aligned */
@@ -477,7 +505,17 @@ static void gtzc_internal_flash_priv(uint32_t offset_start, uint32_t offset_end)
 
 void gtzc_init_cfg(void)
 {
+#if (defined (MBEDTLS_SHA256_C) && defined (MBEDTLS_SHA256_ALT)) \
+ || (defined (MBEDTLS_SHA1_C) && defined (MBEDTLS_SHA1_ALT)) \
+ || (defined (MBEDTLS_MD5_C) && defined (MBEDTLS_MD5_ALT)) \
+ || (defined (MBEDTLS_ECP_C) && defined (MBEDTLS_ECP_ALT)) \
+ || (defined (MBEDTLS_ECDSA_C) && (defined (MBEDTLS_ECDSA_SIGN_ALT) || defined (MBEDTLS_ECDSA_VERIFY_ALT))) \
+ || (defined (MBEDTLS_AES_C) && defined (MBEDTLS_AES_ALT)) \
+ || (defined (MBEDTLS_GCM_C) && defined (MBEDTLS_GCM_ALT)) \
+ || (defined (MBEDTLS_CCM_C) && defined (MBEDTLS_CCM_ALT)) \
+ || defined (HW_CRYPTO_DPA_AES) || defined (HW_CRYPTO_DPA_GCM)
   uint32_t gtzc_periph_att;
+#endif
 
   if (uFlowStage == FLOW_STAGE_CFG)
   {
@@ -487,7 +525,7 @@ void gtzc_init_cfg(void)
     FLOW_CONTROL_STEP(uFlowProtectValue, FLOW_STEP_GTZC_VTOR_LCK, FLOW_CTRL_GTZC_VTOR_LCK);
 
     /* Check PRIS Is enabled */
-    if(SCB->AIRCR & SCB_AIRCR_PRIS_Msk == 0)
+    if((SCB->AIRCR & SCB_AIRCR_PRIS_Msk) == 0)
       Error_Handler();
     FLOW_CONTROL_STEP(uFlowProtectValue, FLOW_STEP_GTZC_PRIS_EN, FLOW_CTRL_GTZC_PRIS_EN);
 

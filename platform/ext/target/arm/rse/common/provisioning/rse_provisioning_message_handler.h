@@ -31,13 +31,18 @@ enum provisioning_message_report_step_t {
     PROVISIONING_REPORT_STEP_SET_TP_MODE_PCI = 0x22221111,
     PROVISIONING_REPORT_STEP_SET_TP_MODE_TCI = 0x22222222,
     PROVISIONING_REPORT_STEP_VALIDATE_BLOB = 0x33333333,
+    PROVISIONING_REPORT_STEP_VALIDATE_AUTH_PLAIN_MESSAGE = 0x3333AAAA,
     PROVISIONING_REPORT_STEP_CM_PROVISIONING = 0x44444444,
     PROVISIONING_REPORT_STEP_BL1_2_PROVISIONING = 0x44445555,
     PROVISIONING_REPORT_STEP_MANDATORY_CM_PROVISIONING = 0x55556666,
     PROVISIONING_REPORT_STEP_MANDATORY_EARLY_DM_PROVISIONING = 0x66667777,
     PROVISIONING_REPORT_STEP_OTHER_BLOB_DONE = 0x77778888,
     PROVISIONING_REPORT_STEP_PARSE_PLAIN_DATA = 0x88889999,
-    PROVISIONING_REPORT_STEP_UPDATE_ROTPKS = 0x9999AAAA,
+    PROVISIONING_REPORT_STEP_UPDATE_NON_ENDORSED_DM_ROTPKS = 0x9999AAAA,
+    PROVISIONING_REPORT_STEP_UPDATE_CM_ROTPKS = 0x9999BBBB,
+    PROVISIONING_REPORT_STEP_UPDATE_DM_ROTPKS = 0x9999CCCC,
+    PROVISIONING_REPORT_STEP_GENERATE_CERTIFICATE = 0xBBBBAAAA,
+    PROVISIONING_REPORT_STEP_VERIFY_CERTIFICATE = 0xCCCCAAAA,
     PROVISIONING_REPORT_STEP_FORCE_UINT_SIZE = UINT32_MAX,
 };
 
@@ -52,6 +57,9 @@ struct provisioning_message_handler_config {
     enum tfm_plat_err_t (*blob_handler)(const struct rse_provisioning_message_blob_t *, size_t, const void *);
     enum tfm_plat_err_t (*cert_handler)(const struct rse_provisioning_message_cert_t *, size_t, const void *);
     enum tfm_plat_err_t (*plain_data_handler)(const struct rse_provisioning_message_plain_t *, size_t, const void *);
+    enum tfm_plat_err_t (*authenticated_plain_data_handler)(
+        const struct rse_provisioning_message_authenticated_plain_t *auth_plain, size_t msg_size,
+        const void *ctx);
 };
 
 enum tfm_plat_err_t handle_provisioning_message(const struct rse_provisioning_message_t *msg, size_t msg_size,

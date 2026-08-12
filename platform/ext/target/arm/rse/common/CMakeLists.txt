@@ -1,7 +1,5 @@
 #-------------------------------------------------------------------------------
 # SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
-# Copyright (c) 2022 Cypress Semiconductor Corporation (an Infineon company)
-# or an affiliate of Cypress Semiconductor Corporation. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -18,13 +16,11 @@ target_include_directories(platform_region_defs
     INTERFACE
         partition
         ${RSE_SUBPLATFORM_PAL_CONFIG_DIR}
+        $<$<NOT:$<BOOL:${RSE_SUBPLATFORM_BOOT_MEASUREMENTS}>>:${CMAKE_CURRENT_SOURCE_DIR}/boot_measurement/>
         .
 )
 
 string(REPLACE "SHA" "PSA_ALG_SHA_" PSA_MEASUREMENT_HASH_ALG ${MEASURED_BOOT_HASH_ALG})
-if (RSE_PROVISIONING_CURVE)
-    string(REGEX REPLACE "P" "P_" CC3XX_PROVISIONING_CURVE ${RSE_PROVISIONING_CURVE})
-endif()
 
 target_compile_definitions(platform_region_defs
     INTERFACE
@@ -40,26 +36,32 @@ target_compile_definitions(platform_region_defs
         $<$<BOOL:${PLATFORM_ERROR_CODES}>:PLATFORM_ERROR_CODES>
         $<$<BOOL:${RSE_ENABLE_BRINGUP_HELPERS}>:RSE_ENABLE_BRINGUP_HELPERS>
         $<$<BOOL:${RSE_OTP_TRNG}>:RSE_OTP_TRNG>
-        $<$<BOOL:${RSE_LOAD_NS_IMAGE}>:RSE_LOAD_NS_IMAGE>
+        $<$<BOOL:${TFM_LOAD_NS_IMAGE}>:TFM_LOAD_NS_IMAGE>
         $<$<BOOL:${RSE_BIT_PROGRAMMABLE_OTP}>:RSE_BIT_PROGRAMMABLE_OTP>
         $<$<BOOL:${RSE_USE_OTP_EMULATION_IN_SRAM}>:RSE_USE_OTP_EMULATION_IN_SRAM>
         $<$<BOOL:${RSE_USE_ROM_LIB_FROM_SRAM}>:RSE_USE_ROM_LIB_FROM_SRAM>
         $<$<BOOL:${RSE_SUPPORT_ROM_LIB_RELOCATION}>:RSE_SUPPORT_ROM_LIB_RELOCATION>
         RSE_AMOUNT=${RSE_AMOUNT}
+        SFCP_NUMBER_NODES=${SFCP_NUMBER_NODES}
+        $<$<BOOL:${RSE_OTP_HAS_CC_TRNG_CONFIG}>:RSE_OTP_HAS_CC_TRNG_CONFIG>
+        $<$<BOOL:${RSE_OTP_HAS_SP800_90B_ENTROPY_PARAMS}>:RSE_OTP_HAS_SP800_90B_ENTROPY_PARAMS>
         $<$<BOOL:${RSE_OTP_HAS_RSE_ID}>:RSE_OTP_HAS_RSE_ID>
         $<$<BOOL:${RSE_OTP_HAS_ROUTING_TABLES}>:RSE_OTP_HAS_ROUTING_TABLES>
         $<$<BOOL:${TFM_PARTITION_DELEGATED_ATTESTATION}>:RSE_BOOT_KEYS_CCA>
         $<$<BOOL:${TFM_PARTITION_DPE}>:RSE_BOOT_KEYS_DPE>
+        $<$<OR:$<BOOL:${TFM_BL1_2_IMAGE_BINDING}>,$<BOOL:${MCUBOOT_IMAGE_BINDING}>>:RSE_BOOT_KEYS_BINDING>
         TFM_UNIQUE_ERROR_CODES=1
         LCM_VERSION=0
         RSE_TP_MODE=LCM_TP_MODE_${RSE_TP_MODE}
+        RSE_TESTS_TP_MODE=LCM_TP_MODE_${RSE_TESTS_TP_MODE}
         LCM_DCU_PARITY
+        LCM_DCU_PAIR_COUNT=13
         $<$<BOOL:${PLAT_MHU_VERSION}>:PLAT_MHU_VERSION=${PLAT_MHU_VERSION}>
         $<$<BOOL:${RSE_BL1_TEST_BINARY}>:RSE_BL1_TEST_BINARY>
-        $<$<BOOL:${RSE_TEST_BINARY_IN_ROM}>:RSE_TEST_BINARY_IN_ROM>
+        $<$<BOOL:${RSE_TEST_BINARY_IN_SRAM}>:RSE_TEST_BINARY_IN_SRAM>
         $<$<BOOL:${TEST_BL1_2}>:TEST_BL1_2>
         MEASURED_BOOT_HASH_ALG=${PSA_MEASUREMENT_HASH_ALG}
-        $<$<BOOL:${RSE_PROVISIONING_CURVE}>:RSE_PROVISIONING_CURVE=CC3XX_EC_CURVE_SEC${CC3XX_PROVISIONING_CURVE}_R1>
+        $<$<BOOL:${RSE_PROVISIONING_CURVE}>:RSE_PROVISIONING_CURVE=TFM_BL1_CURVE_${RSE_PROVISIONING_CURVE}>
         $<$<BOOL:${RSE_PROVISIONING_CURVE}>:RSE_PROVISIONING_CURVE_${RSE_PROVISIONING_CURVE}>
         $<$<BOOL:${RSE_PROVISIONING_HASH_ALG}>:RSE_PROVISIONING_HASH_ALG=TFM_BL1_HASH_ALG_${RSE_PROVISIONING_HASH_ALG}>
         $<$<BOOL:${RSE_PROVISIONING_ENABLE_ECDSA_SIGNATURES}>:RSE_PROVISIONING_ENABLE_ECDSA_SIGNATURES>
@@ -67,9 +69,27 @@ target_compile_definitions(platform_region_defs
         $<$<BOOL:${RSE_PROVISIONING_CM_DEBUG_CLOSED}>:RSE_PROVISIONING_CM_DEBUG_CLOSED>
         $<$<BOOL:${RSE_PROVISIONING_REQUIRE_AUTHENTICATION_FOR_TCI}>:RSE_PROVISIONING_REQUIRE_AUTHENTICATION_FOR_TCI>
         $<$<BOOL:${RSE_BOOT_IN_DM_LCS}>:RSE_BOOT_IN_DM_LCS>
+        $<$<BOOL:${RSE_ROTPK_REVOCATION}>:RSE_ROTPK_REVOCATION>
         $<$<BOOL:${RSE_NON_ENDORSED_DM_PROVISIONING}>:RSE_NON_ENDORSED_DM_PROVISIONING>
+        $<$<BOOL:${RSE_ENDORSEMENT_CERTIFICATE_PROVISIONING}>:RSE_ENDORSEMENT_CERTIFICATE_PROVISIONING>
         $<$<BOOL:${RSE_PROVISIONING_DM_SIGN_KEY_CM_ROTPK_HASH_ALG}>:RSE_PROVISIONING_DM_SIGN_KEY_CM_ROTPK_HASH_ALG=RSE_ROTPK_HASH_ALG_${RSE_PROVISIONING_DM_SIGN_KEY_CM_ROTPK_HASH_ALG}>
         $<$<BOOL:${RSE_OTP_HAS_SOC_AREA}>:RSE_OTP_HAS_SOC_AREA>
+        IC_CONFIG_DMA_CACHE_FLUSH_ENABLE
+        $<$<BOOL:${TFM_CODE_COVERAGE}>:TFM_CODE_COVERAGE>
+        $<$<BOOL:${CONFIG_TFM_REUSE_COPY_AREA_FOR_SP_STACKS}>:CONFIG_TFM_REUSE_COPY_AREA_FOR_SP_STACKS>
+        $<$<BOOL:${RSE_SKU_ENABLED}>:RSE_SKU_ENABLED>
+        $<$<BOOL:${RSE_SUBPLATFORM_BOOT_MEASUREMENTS}>:RSE_SUBPLATFORM_BOOT_MEASUREMENTS>
+        $<$<BOOL:${RSE_HAS_SE_DEV_SOFT_LCS}>:RSE_HAS_SE_DEV_SOFT_LCS>
+)
+
+target_link_options(platform_region_defs
+    INTERFACE
+        # When copy sections (RX) are reused as stacks (RW) at runtime, the linker merges their
+        # attributes. As a result, the PT_LOAD segment of the FLASH region becomes RWX, which
+        # normally triggers a linker warning.
+        # Since this region is intentionally RWX (RX during boot and RW at runtime), the warning
+        # is explicitly suppressed.
+        $<$<AND:$<C_COMPILER_ID:GNU,Clang>,$<BOOL:${CONFIG_TFM_REUSE_COPY_AREA_FOR_SP_STACKS}>>:-Wl,--no-warn-rwx-segments>
 )
 
 #========================= Platform common defs ===============================#
@@ -82,7 +102,7 @@ target_sources(tfm_s
 target_add_scatter_file(tfm_s
         $<$<C_COMPILER_ID:ARMClang>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/armclang/tfm_isolation_s.sct>
         $<$<C_COMPILER_ID:GNU>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/gcc/tfm_isolation_s.ld>
-        $<$<C_COMPILER_ID:Clang>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/llvm/tfm_isolation_s.ld>
+        $<$<C_COMPILER_ID:Clang>:${CMAKE_BINARY_DIR}/generated/platform/ext/common/atfe/tfm_isolation_s.ld>
 )
 
 target_sources(bl2
@@ -94,7 +114,7 @@ target_sources(bl2
 target_add_scatter_file(bl2
         $<$<C_COMPILER_ID:ARMClang>:${PLATFORM_DIR}/ext/common/armclang/tfm_common_bl2.sct>
         $<$<C_COMPILER_ID:GNU>:${PLATFORM_DIR}/ext/common/gcc/tfm_common_bl2.ld>
-        $<$<C_COMPILER_ID:Clang>:${PLATFORM_DIR}/ext/common/llvm/tfm_common_bl2.ld>
+        $<$<C_COMPILER_ID:Clang>:${PLATFORM_DIR}/ext/common/atfe/tfm_common_bl2.ld>
 )
 
 target_compile_options(bl2_scatter
@@ -114,7 +134,7 @@ target_sources(bl1_1
 target_add_scatter_file(bl1_1
         $<$<C_COMPILER_ID:ARMClang>:${CMAKE_CURRENT_SOURCE_DIR}/device/source/armclang/rse_bl1_1.sct>
         $<$<C_COMPILER_ID:GNU>:${CMAKE_CURRENT_SOURCE_DIR}/device/source/gcc/rse_bl1_1.ld>
-        $<$<C_COMPILER_ID:Clang>:${CMAKE_CURRENT_SOURCE_DIR}/device/source/llvm/rse_bl1_1.ld>
+        $<$<C_COMPILER_ID:Clang>:${CMAKE_CURRENT_SOURCE_DIR}/device/source/atfe/rse_bl1_1.ld>
 )
 
 target_sources(bl1_2
@@ -124,17 +144,25 @@ target_sources(bl1_2
 target_add_scatter_file(bl1_2
         $<$<C_COMPILER_ID:ARMClang>:${CMAKE_CURRENT_SOURCE_DIR}/device/source/armclang/rse_bl1_2.sct>
         $<$<C_COMPILER_ID:GNU>:${CMAKE_CURRENT_SOURCE_DIR}/device/source/gcc/rse_bl1_2.ld>
-        $<$<C_COMPILER_ID:Clang>:${CMAKE_CURRENT_SOURCE_DIR}/device/source/llvm/rse_bl1_2.ld>
+        $<$<C_COMPILER_ID:Clang>:${CMAKE_CURRENT_SOURCE_DIR}/device/source/atfe/rse_bl1_2.ld>
 )
 
 
 install(FILES       tfm_builtin_key_ids.h
         DESTINATION ${INSTALL_INTERFACE_INC_DIR})
 
+
+#========================= TF-M platform config ===============================#
+# Path for common RSE config: config_tfm_target_rse_common.h
+target_include_directories(tfm_config
+    INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+)
+
 #========================= Platform Secure ====================================#
 
 if (TFM_MULTI_CORE_TOPOLOGY)
-    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/rse_comms rse_comms)
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/sfcp)
 endif()
 
 if (RSE_AMOUNT GREATER 1)
@@ -147,11 +175,22 @@ if (RSE_BL1_TEST_BINARY)
     add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/tests/rse_test_executable rse_test_executable)
 endif()
 
+# Fetch PSA Crypto drivers from external repository
+add_subdirectory(${PLATFORM_DIR}/ext/target/arm/drivers/cc3xx cc3xx-src)
+
 # Set which PLATFORM dependency must be used by the CC3XX driver
 set(CC3XX_PLATFORM_INTERFACE platform_bl1_1)
 set(CC3XX_TARGET_PREFIX bl1_)
 
-add_subdirectory(${PLATFORM_DIR}/ext/target/arm/drivers/cc3xx cc3xx)
+# BL1 code size is dimensioned for production hence we can't afford
+# the variability required by building with different build type:
+# Force the usage of RelWithDebInfo for the PSA crypto driver regardless
+# of the specified build option
+set(SAVED_BUILD_TYPE ${CMAKE_BUILD_TYPE})
+set(CMAKE_BUILD_TYPE "RelWithDebInfo")
+add_subdirectory(${CC3XX_DRIVER_PATH} cc3xx)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/psa bl1_psa_crypto)
+set(CMAKE_BUILD_TYPE ${SAVED_BUILD_TYPE})
 
 target_include_directories(platform_s
     PUBLIC
@@ -181,14 +220,18 @@ target_include_directories(platform_s
         ${PLATFORM_DIR}/ext/target/arm/drivers/kmu
         ${PLATFORM_DIR}/ext/target/arm/drivers/lcm
         ${PLATFORM_DIR}/ext/target/arm/drivers/gpio/pl061
+        ${PLATFORM_DIR}/ext/target/arm/drivers/ppu
+        ${PLATFORM_DIR}/ext/target/arm/drivers/watchdog
         ./bringup_helpers
         ./cc3xx
         ./runtime/cc3xx
-        ${PLATFORM_DIR}/ext/target/arm/drivers/cc3xx/low_level_driver/include
-        ${PLATFORM_DIR}/ext/target/arm/drivers/cc3xx/common
+        ${CC3XX_DRIVER_PATH}/low_level_driver/include
+        ${CC3XX_DRIVER_PATH}/cc3xx/common
         soft_crc
         ${PLATFORM_DIR}/ext/target/arm/drivers/dcsu/include
         ${PLATFORM_DIR}/ext/target/arm/drivers/dcsu/default_config
+        ${PLATFORM_DIR}/ext/common/scmi
+        ${PLATFORM_DIR}/ext/common/scmi/protocols
 )
 
 target_sources(platform_s
@@ -202,6 +245,9 @@ target_sources(platform_s
         ${PLATFORM_DIR}/ext/target/arm/drivers/dma/dma350/dma350_lib.c
         $<$<BOOL:${RSE_USE_SDS_LIB}>:${CMAKE_CURRENT_SOURCE_DIR}/libraries/sds.c>
         native_drivers/atu_rse_drv.c
+        native_drivers/atu_rse_lib.c
+        device/source/atu_config_runtime.c
+        ${PLATFORM_DIR}/ext/common/template/tfm_fih_platform.c
         ${PLATFORM_DIR}/ext/target/arm/drivers/dma/dma350/dma350_drv.c
         ${PLATFORM_DIR}/ext/target/arm/drivers/dma/dma350/dma350_ch_drv.c
         ${PLATFORM_DIR}/ext/target/arm/drivers/kmu/kmu_drv.c
@@ -237,6 +283,7 @@ target_sources(platform_s
         ${PLATFORM_DIR}/ext/target/arm/drivers/gpio/pl061/gpio_pl061_drv.c
         ./platform_fatal_error.c
         ./cc3xx/cc3xx_aes_external_key_loader.c
+        ./cc3xx/cc3xx_platform_helpers.c
         ./rse_sam_config.c
         ./rse_attack_tracking_counter.c
         runtime_shared_data.c
@@ -244,12 +291,17 @@ target_sources(platform_s
         $<$<BOOL:${PLATFORM_PSA_ADAC_SECURE_DEBUG}>:${CMAKE_CURRENT_SOURCE_DIR}/rse_debug_after_reset.c>
         ./rse_permanently_disable_device.c
         ./rse_zero_count.c
+        ./rse_zero_count_regions.c
         ./rse_persistent_data.c
         ./dpa_hardened_word_copy.c
         $<$<BOOL:${RSE_ENABLE_DCSU_PROVISIONING_COMMS}>:${PLATFORM_DIR}/ext/target/arm/drivers/dcsu/src/dcsu_drv.c>
         $<$<BOOL:${RSE_ENABLE_DCSU_PROVISIONING_COMMS}>:${CMAKE_CURRENT_SOURCE_DIR}/rse_dcsu_hal.c>
+        ./rse_soc_uid.c
         ./platform_shared_measurement_data.c
         $<$<BOOL:${RSE_OTP_HAS_RSE_ID}>:${CMAKE_CURRENT_SOURCE_DIR}/rse_get_rse_id_from_otp.c>
+        ${PLATFORM_DIR}/ext/target/arm/drivers/watchdog/arm_watchdog_drv.c
+        $<$<BOOL:${TFM_PARTITION_SCMI_COMMS}>:${PLATFORM_DIR}/ext/common/scmi/protocols/scmi_system_power.c>
+        $<$<BOOL:${TFM_PARTITION_SCMI_COMMS}>:${PLATFORM_DIR}/ext/common/scmi/scmi_common.c>
 )
 
 target_sources(tfm_sprt
@@ -268,6 +320,8 @@ target_compile_definitions(platform_s
         CMSIS_device_header="rse.h"
         $<$<BOOL:${PLATFORM_SVC_HANDLERS}>:PLATFORM_SVC_HANDLERS>
         $<$<BOOL:${RSE_USE_SDS_LIB}>:RSE_USE_SDS_LIB>
+        RSE_SUBPLATFORM_PAL_DEFAULT_IOCTL=${RSE_SUBPLATFORM_PAL_DEFAULT_IOCTL}
+        CC3XX_CLOCK_DIVIDER_SELECT=${CC3XX_CLOCK_DIVIDER_SELECT}
 )
 
 target_compile_options(platform_s
@@ -275,20 +329,33 @@ target_compile_options(platform_s
         ${COMPILER_CMSE_FLAG}
 )
 
+if(TEST_S_SCMI_COMMS)
+    target_link_libraries(platform_s
+        INTERFACE
+            tfm_extras_test_secure_headers
+    )
+endif()
+
 #====================== SCMI hardware abstraction layer =======================#
 
 if (TFM_PARTITION_SCMI_COMMS)
+    # generate RSE platform group like neoverse_rd, tc, etc.
+    string(REGEX REPLACE "^([^/]+/[^/]+/[^/]+).*$" "\\1" RSE_PLATFORM_GROUP_DIR "${TFM_PLATFORM}")
+
     add_library(scmi_hal INTERFACE)
 
     target_include_directories(scmi_hal
         INTERFACE
             scmi
+            ${PLATFORM_DIR}/ext/common/scmi
+            ${PLATFORM_DIR}/ext/common/scmi/protocols
+            ${PLATFORM_DIR}/ext/target/${RSE_PLATFORM_GROUP_DIR}/common
     )
 
     target_sources(scmi_hal
         INTERFACE
             scmi/scmi_hal.c
-            ${PLATFORM_DIR}/ext/common/scmi_hal_common.c
+            ${PLATFORM_DIR}/ext/common/scmi/scmi_hal_common.c
     )
 endif()
 
@@ -300,6 +367,16 @@ if (TFM_PARTITION_RUNTIME_PROVISIONING)
     target_sources(runtime_provisioning_hal
         INTERFACE
             provisioning/runtime_provisioning_partition_hal.c
+    )
+endif()
+
+#=============== dTPM client hardware abstraction layer =======================#
+if (TFM_PARTITION_DTPM_CLIENT)
+    add_library(dtpm_client_hal INTERFACE)
+
+    target_sources(dtpm_client_hal
+        INTERFACE
+            dtpm_client_hal.c
     )
 endif()
 
@@ -318,6 +395,11 @@ if (TFM_PARTITION_CRYPTO)
             ./device/include
             ./device/config
             ${RSE_SUBPLATFORM_PAL_CONFIG_DIR}
+    )
+
+    target_compile_definitions(platform_crypto_keys
+        PRIVATE
+            $<$<BOOL:${TEST_S_RSE_IMAGE_VERIFICATION}>:TEST_S_RSE_IMAGE_VERIFICATION>
     )
 endif()
 
@@ -338,6 +420,8 @@ target_sources(platform_bl2
         $<$<OR:$<BOOL:${PLATFORM_HOST_HAS_MCP}>,$<BOOL:${PLATFORM_HOST_HAS_SCP}>>:${CMAKE_CURRENT_SOURCE_DIR}/host_drivers/mscp_drv/mscp_drv.c>
         $<$<BOOL:${PLATFORM_HAS_BOOT_DMA}>:${PLATFORM_DIR}/ext/target/arm/drivers/dma/dma350/dma350_lib.c>
         native_drivers/atu_rse_drv.c
+        native_drivers/atu_rse_lib.c
+        device/source/atu_config_bl2.c
         $<$<BOOL:${PLATFORM_HAS_BOOT_DMA}>:${PLATFORM_DIR}/ext/target/arm/drivers/dma/dma350/dma350_ch_drv.c>
         $<$<BOOL:${PLATFORM_HAS_BOOT_DMA}>:${PLATFORM_DIR}/ext/target/arm/drivers/dma/dma350/dma350_drv.c>
         ${PLATFORM_DIR}/ext/target/arm/drivers/kmu/kmu_drv.c
@@ -353,6 +437,7 @@ target_sources(platform_bl2
         otp_lcm.c
         nv_counters.c
         ./bl2/rse_bl2_rotpk.c
+        ./bl2/rse_bl2_rotkw.c
         $<$<BOOL:${RSE_SUBPLATFORM_PAL_DEFAULT_ROTPK}>:${CMAKE_CURRENT_SOURCE_DIR}/rse_rotpk_mapping.c>
         $<$<BOOL:${RSE_SUBPLATFORM_PAL_DEFAULT_NV_COUNTERS}>:${CMAKE_CURRENT_SOURCE_DIR}/rse_nv_counter_mapping.c>
         $<$<BOOL:${RSE_XIP}>:${CMAKE_CURRENT_SOURCE_DIR}/bl2/sic_boot.c>
@@ -363,13 +448,22 @@ target_sources(platform_bl2
         ./rse_attack_tracking_counter.c
         $<$<BOOL:${RSE_BL2_ENABLE_IMAGE_STAGING}>:${CMAKE_CURRENT_SOURCE_DIR}/bl2/staged_boot.c>
         $<$<BOOL:${RSE_BL2_ENABLE_IMAGE_STAGING}>:${CMAKE_CURRENT_SOURCE_DIR}/cmsis_drivers/Driver_Flash_memcpy.c>
+        ${CMAKE_CURRENT_SOURCE_DIR}/bl2/rse_boot_measurements.c
         ./rse_permanently_disable_device.c
         ./rse_zero_count.c
+        ./rse_zero_count_regions.c
         ./cc3xx/cc3xx_aes_external_key_loader.c
+        ./cc3xx/cc3xx_platform_helpers.c
         ./dpa_hardened_word_copy.c
         ./rse_persistent_data.c
         ./platform_shared_measurement_data.c
         $<$<BOOL:${RSE_OTP_HAS_RSE_ID}>:${CMAKE_CURRENT_SOURCE_DIR}/rse_get_rse_id_from_otp.c>
+        ${PLATFORM_DIR}/ext/target/arm/drivers/watchdog/arm_watchdog_drv.c
+        $<$<NOT:$<BOOL:${RSE_SUBPLATFORM_BOOT_MEASUREMENTS}>>:${CMAKE_CURRENT_SOURCE_DIR}/boot_measurement/tfm_plat_boot_measurement.c>
+        $<$<BOOL:${MCUBOOT_IMAGE_BINDING}>:${CMAKE_CURRENT_SOURCE_DIR}/bl2/rse_bl2_binding_util.c>
+        $<$<BOOL:${MCUBOOT_IMAGE_BINDING}>:${CMAKE_CURRENT_SOURCE_DIR}/bl2/rse_bl2_binding_keys.c>
+        $<$<AND:$<BOOL:${MCUBOOT_IMAGE_BINDING}>,$<NOT:$<BOOL:${MCUBOOT_ENC_IMAGES}>>>:${CMAKE_CURRENT_SOURCE_DIR}/bl2/rse_bl2_binding_cmac.c>
+        $<$<AND:$<BOOL:${MCUBOOT_IMAGE_BINDING}>,$<BOOL:${MCUBOOT_ENC_IMAGES}>>:${CMAKE_CURRENT_SOURCE_DIR}/bl2/rse_bl2_binding_ccm.c>
 )
 
 target_include_directories(platform_bl2
@@ -402,6 +496,8 @@ target_include_directories(platform_bl2
         ${PLATFORM_DIR}/ext/target/arm/drivers/gpio/pl061
         ${PLATFORM_DIR}/ext/target/arm/drivers/dcsu/include
         ${PLATFORM_DIR}/ext/target/arm/drivers/dcsu/default_config
+        ${PLATFORM_DIR}/ext/target/arm/drivers/watchdog
+        ${PLATFORM_DIR}/ext/target/arm/drivers/ppu
         ./bringup_helpers
         ./cc3xx
         bl2/cc3xx
@@ -414,9 +510,11 @@ target_compile_definitions(platform_bl2
     PUBLIC
         $<$<BOOL:${PLATFORM_HAS_BOOT_DMA}>:PLATFORM_HAS_BOOT_DMA>
         $<$<BOOL:${PLATFORM_BOOT_DMA_MIN_SIZE_REQ}>:BOOT_DMA_MIN_SIZE_REQ=${PLATFORM_BOOT_DMA_MIN_SIZE_REQ}>
+        CC3XX_CLOCK_DIVIDER_SELECT=${CC3XX_CLOCK_DIVIDER_SELECT}
     PRIVATE
         $<$<BOOL:${TFM_PARTITION_DELEGATED_ATTESTATION}>:RSE_BOOT_KEYS_CCA>
         $<$<BOOL:${TFM_PARTITION_DPE}>:RSE_BOOT_KEYS_DPE>
+        $<$<OR:$<BOOL:${TFM_BL1_2_IMAGE_BINDING}>,$<BOOL:${MCUBOOT_IMAGE_BINDING}>>:RSE_BOOT_KEYS_BINDING>
         # Needed for DMA-350 library
         $<$<BOOL:${PLATFORM_HAS_BOOT_DMA}>:CMSIS_device_header="rse.h">
         $<$<BOOL:${PLATFORM_HAS_NOC_S3}>:PLATFORM_HAS_NOC_S3>
@@ -426,8 +524,9 @@ target_compile_definitions(platform_bl2
         $<$<BOOL:${RSE_USE_SDS_LIB}>:RSE_USE_SDS_LIB>
         $<$<BOOL:${RSE_BL2_ENABLE_IMAGE_STAGING}>:RSE_BL2_ENABLE_IMAGE_STAGING>
         $<$<BOOL:${MCUBOOT_IMAGE_MULTI_SIG_SUPPORT}>:MCUBOOT_IMAGE_MULTI_SIG_SUPPORT>
+        $<$<BOOL:${MCUBOOT_IMAGE_BINDING}>:MCUBOOT_IMAGE_BINDING>
         $<$<BOOL:${MCUBOOT_ROTPK_SIGN_POLICY}>:MCUBOOT_ROTPK_SIGN_POLICY>
-        MCUBOOT_ROTPK_MAX_KEYS_PER_IMAGE=${MCUBOOT_ROTPK_MAX_KEYS_PER_IMAGE}
+        MAX_KEYS_PER_IMAGE=${MCUBOOT_ROTPK_MAX_KEYS_PER_IMAGE}
 )
 
 target_compile_options(platform_bl2
@@ -449,6 +548,8 @@ target_sources(platform_bl1_1
         $<$<BOOL:${RSE_DEFAULT_CLOCK_CONFIG}>:${CMAKE_CURRENT_SOURCE_DIR}/device/source/rse_clocks.c>
         ./device/source/system_core_init.c
         ./native_drivers/atu_rse_drv.c
+        ./native_drivers/atu_rse_lib.c
+        ./device/source/atu_config_bl1.c
         ${PLATFORM_DIR}/ext/target/arm/drivers/kmu/kmu_drv.c
         ${PLATFORM_DIR}/ext/target/arm/drivers/lcm/lcm_drv.c
         $<$<EQUAL:${PLAT_MHU_VERSION},2>:${CMAKE_CURRENT_SOURCE_DIR}/native_drivers/mhu_v2_x.c>
@@ -467,13 +568,14 @@ target_sources(platform_bl1_1
         $<$<BOOL:${RSE_DEBUG_UART}>:${PLATFORM_DIR}/ext/target/arm/drivers/usart/cmsdk/uart_cmsdk_drv.c>
         ./dpa_hardened_word_copy.c
         ./cc3xx/cc3xx_aes_external_key_loader.c
+        ./cc3xx/cc3xx_platform_helpers.c
         $<$<BOOL:${RSE_ENABLE_BRINGUP_HELPERS}>:${CMAKE_CURRENT_SOURCE_DIR}/bringup_helpers/rse_bringup_helpers.c>
         ./bl1/rse_kmu_keys.c
-        $<$<BOOL:${TFM_BL1_FIH_ENABLE}>:${CMAKE_CURRENT_SOURCE_DIR}/bl1/rse_fih.c>
         ./rse_boot_state.c
         ${PLATFORM_DIR}/ext/target/arm/drivers/gpio/pl061/gpio_pl061_drv.c
         ./platform_fatal_error.c
-        $<$<NOT:$<BOOL:${TFM_BL1_SOFTWARE_CRYPTO}>>:${CMAKE_CURRENT_SOURCE_DIR}/bl1/cc3xx/cc3xx_rom_crypto.c>
+        ${CMAKE_CURRENT_SOURCE_DIR}/bl1/cc3xx/cc3xx_rom_crypto.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/bl1/bl1_fih_platform.c
         ${CMAKE_CURRENT_SOURCE_DIR}/bl1/cc3xx/cc3xx_rom_random.c
         $<$<BOOL:${RSE_OTP_TRNG}>:${CMAKE_CURRENT_SOURCE_DIR}/rse_trng.c>
         ${PLATFORM_DIR}/ext/target/arm/drivers/sam/sam_drv.c
@@ -482,23 +584,34 @@ target_sources(platform_bl1_1
         runtime_shared_data.c
         soft_crc/soft_crc.c
         ${PLATFORM_DIR}/ext/target/arm/drivers/lcm/lcm_drv.c
+        ${PLATFORM_DIR}/ext/target/arm/drivers/watchdog/arm_watchdog_drv.c
+        ${PLATFORM_DIR}/ext/target/arm/drivers/mpu/armv8m/mpu_armv8m_drv.c
         ./device/source/device_definition.c
         ./bl1/bl1_1_debug.c
         ./rse_permanently_disable_device.c
         ./rse_zero_count.c
+        ./rse_zero_count_regions.c
         ./rse_persistent_data.c
+        ./rse_rotpk_revocation.c
         $<$<BOOL:${RSE_ENABLE_DCSU_PROVISIONING_COMMS}>:${PLATFORM_DIR}/ext/target/arm/drivers/dcsu/src/dcsu_drv.c>
         $<$<BOOL:${RSE_ENABLE_DCSU_PROVISIONING_COMMS}>:${CMAKE_CURRENT_SOURCE_DIR}/rse_dcsu_hal.c>
         ./platform_shared_measurement_data.c
         ./rse_soc_uid.c
-        ${PLATFORM_DIR}/ext/target/arm/drivers/mpu/armv8m/mpu_armv8m_drv.c
         $<$<BOOL:${RSE_OTP_HAS_RSE_ID}>:${CMAKE_CURRENT_SOURCE_DIR}/rse_get_rse_id_from_otp.c>
+        $<$<BOOL:${RSE_ENABLE_ROM_SELF_TESTS}>:${CMAKE_CURRENT_SOURCE_DIR}/rse_boot_self_tests.c>
+        ${CMAKE_CURRENT_SOURCE_DIR}/rse_chip_output_data.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/bl1/sku_se_dev.c
+        $<$<BOOL:${TEST_BL1_1}>:${CMAKE_CURRENT_SOURCE_DIR}/tests/bl1_1/sku_test_stubs.c>
 )
 
 target_compile_definitions(platform_bl1_1
     PRIVATE
         $<$<BOOL:${PLATFORM_PSA_ADAC_SECURE_DEBUG}>:PLATFORM_PSA_ADAC_SECURE_DEBUG>
         $<$<BOOL:${RSE_ENABLE_FIH_SW_DELAY}>:RSE_ENABLE_FIH_SW_DELAY>
+        $<$<BOOL:${RSE_ENABLE_ROM_SELF_TESTS}>:RSE_ENABLE_ROM_SELF_TESTS>
+        $<$<BOOL:${RSE_ENABLE_ECDSA_SELF_TEST}>:RSE_ENABLE_ECDSA_SELF_TEST>
+        $<$<BOOL:${RSE_ENABLE_KDF_CMAC_SELF_TEST}>:RSE_ENABLE_KDF_CMAC_SELF_TEST>
+        CC3XX_CLOCK_DIVIDER_SELECT=${CC3XX_CLOCK_DIVIDER_SELECT}
 )
 
 target_include_directories(platform_bl1_1_interface
@@ -520,11 +633,13 @@ target_include_directories(platform_bl1_1_interface
         ${PLATFORM_DIR}/ext/target/arm/drivers/dma/dma350
         ${PLATFORM_DIR}/ext/target/arm/drivers/kmu
         ${PLATFORM_DIR}/ext/target/arm/drivers/lcm
-        ${PLATFORM_DIR}/ext/target/arm/drivers/cc3xx/low_level_driver/include
-        ${PLATFORM_DIR}/ext/target/arm/drivers/cc3xx/common
+        ${CC3XX_DRIVER_PATH}/low_level_driver/include
+        ${CC3XX_DRIVER_PATH}/common
         ${PLATFORM_DIR}/ext/target/arm/drivers/gpio/pl061
         ${PLATFORM_DIR}/ext/target/arm/drivers/dcsu/include
         ${PLATFORM_DIR}/ext/target/arm/drivers/dcsu/default_config
+        ${PLATFORM_DIR}/ext/target/arm/drivers/watchdog
+        ${PLATFORM_DIR}/ext/target/arm/drivers/ppu
         ./bringup_helpers
         ./cc3xx
         ./bl1/cc3xx
@@ -536,15 +651,22 @@ target_compile_definitions(platform_bl1_1_interface
     INTERFACE
         $<$<BOOL:${TFM_PARTITION_DELEGATED_ATTESTATION}>:RSE_BOOT_KEYS_CCA>
         $<$<BOOL:${TFM_PARTITION_DPE}>:RSE_BOOT_KEYS_DPE>
+        $<$<OR:$<BOOL:${TFM_BL1_2_IMAGE_BINDING}>,$<BOOL:${MCUBOOT_IMAGE_BINDING}>>:RSE_BOOT_KEYS_BINDING>
         KMU_CONFIG_EXTERNAL_SECURE_WORD_COPY
         $<$<BOOL:${RSE_ENCRYPTED_OTP_KEYS}>:RSE_ENCRYPTED_OTP_KEYS>
-        $<$<BOOL:${RSE_ENABLE_TRAM}>:RSE_ENABLE_TRAM>
+        $<$<BOOL:${RSE_ENABLE_CHIP_OUTPUT_DATA}>:RSE_ENABLE_CHIP_OUTPUT_DATA>
 )
 
 target_link_libraries(platform_bl1_1
     PRIVATE
         bl1_cc3xx
+        bl1_1_psa_crypto_interface
         bl1_1_shared_lib_interface
+)
+
+target_link_libraries(platform_s
+    PRIVATE
+        qcbor
 )
 
 if(RSE_SUPPORT_ROM_LIB_RELOCATION)
@@ -571,21 +693,6 @@ if(RSE_SUPPORT_ROM_LIB_RELOCATION)
         PUBLIC
             ${ROM_LIB_RELOCATION_COMPILE_FLAGS}
     )
-
-    target_compile_options(bl1_1_crypto_mbedcrypto
-        PRIVATE
-            ${ROM_LIB_RELOCATION_COMPILE_FLAGS}
-    )
-
-    target_compile_options(bl1_1_crypto_mbedtls
-        PRIVATE
-            ${ROM_LIB_RELOCATION_COMPILE_FLAGS}
-    )
-
-    target_compile_options(bl1_1_crypto_mbedx509
-        PRIVATE
-            ${ROM_LIB_RELOCATION_COMPILE_FLAGS}
-    )
 endif()
 
 if (RSE_USE_ROM_LIB_FROM_SRAM)
@@ -602,7 +709,7 @@ endif()
 
 target_sources(bl1_1_shared_lib
     PRIVATE
-        $<$<NOT:$<BOOL:${TFM_BL1_SOFTWARE_CRYPTO}>>:${CMAKE_CURRENT_SOURCE_DIR}/bl1/cc3xx/cc3xx_rom_crypto.c>
+        ${CMAKE_CURRENT_SOURCE_DIR}/bl1/cc3xx/cc3xx_rom_crypto.c
         $<$<NOT:$<BOOL:${RSE_OTP_TRNG}>>:${CMAKE_CURRENT_SOURCE_DIR}/bl1/cc3xx/cc3xx_rom_random.c>
         $<$<BOOL:${RSE_OTP_TRNG}>:${CMAKE_CURRENT_SOURCE_DIR}/rse_trng.c>
 )
@@ -616,12 +723,16 @@ target_sources(bl1_1
 
 target_sources(platform_bl1_2
     PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/bl1/bl1_fih_platform.c
         $<$<BOOL:${RSE_DEFAULT_CLOCK_CONFIG}>:${CMAKE_CURRENT_SOURCE_DIR}/device/source/rse_clocks.c>
         device/source/system_core_init.c
         ./bl1/boot_hal_bl1_2.c
-        ${PLATFORM_DIR}/ext/target/arm/drivers/mpu/armv8m/mpu_armv8m_drv.c
         ./bl1/bl1_2_debug.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/bl1/sku_se_dev.c
         ./sam_interrupts.c
+        ./native_drivers/atu_rse_drv.c
+        ./native_drivers/atu_rse_lib.c
+        ./device/source/atu_config_bl1.c
 )
 
 add_dependencies(platform_bl1_2 bl1_1_shared_symbols)
@@ -635,12 +746,14 @@ target_include_directories(platform_bl1_2
         ${PLATFORM_DIR}/ext/target/arm/drivers/dcsu/include
         ${PLATFORM_DIR}/ext/target/arm/drivers/dcsu/default_config
         ./tests/rse_test_executable
+        ./native_drivers
 )
 
 target_compile_definitions(platform_bl1_2
     PUBLIC
         $<$<BOOL:${TFM_PARTITION_DELEGATED_ATTESTATION}>:RSE_BOOT_KEYS_CCA>
         $<$<BOOL:${TFM_PARTITION_DPE}>:RSE_BOOT_KEYS_DPE>
+        $<$<OR:$<BOOL:${TFM_BL1_2_IMAGE_BINDING}>,$<BOOL:${MCUBOOT_IMAGE_BINDING}>>:RSE_BOOT_KEYS_BINDING>
 )
 
 if(RSE_USE_HOST_FLASH)
@@ -689,6 +802,34 @@ target_sources(tfm_s
 
 ############################### IMAGE SIGNING ##################################
 
+if (MCUBOOT_ENCRYPT_KW)
+    add_custom_command(OUTPUT ${MCUBOOT_KEY_ENC}
+
+            COMMAND ${Python3_EXECUTABLE}  ${CMAKE_CURRENT_SOURCE_DIR}/provisioning/bl2_key_derivation.py
+                    --key_file "${CMAKE_SOURCE_DIR}/bl1/bl1_1/dummy_guk.bin"
+                    --key_select "kce:cm"
+                    --tp_mode "${RSE_TP_MODE}"
+                    --output_key_file "enc_key_s.b64"
+            COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/enc_key_s.b64 $<TARGET_FILE_DIR:bl2>
+    )
+
+    add_custom_command(OUTPUT ${MCUBOOT_KEY_ENC_NS}
+
+            COMMAND ${Python3_EXECUTABLE}  ${CMAKE_CURRENT_SOURCE_DIR}/provisioning/bl2_key_derivation.py
+                    --key_file "${CMAKE_SOURCE_DIR}/bl1/bl1_1/dummy_guk.bin"
+                    --key_select "kce:dm"
+                    --tp_mode "${RSE_TP_MODE}"
+                    --output_key_file "enc_key_ns.b64"
+            COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/enc_key_ns.b64 $<TARGET_FILE_DIR:bl2>
+    )
+
+    add_custom_target(BL2_encryption_keys ALL
+            SOURCES
+                ${MCUBOOT_KEY_ENC}
+                ${MCUBOOT_KEY_ENC_NS}
+    )
+endif()
+
 if (RSE_XIP)
     add_custom_target(public_key ALL
         SOURCES
@@ -729,7 +870,6 @@ if (RSE_XIP)
         COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${CMAKE_SOURCE_DIR}/tools/modules
         ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/bl2/create_xip_tables.py
             --input_image $<TARGET_FILE_DIR:tfm_s>/tfm_s.bin
-            --bl1_2_hash ${CMAKE_BINARY_DIR}/bin/bl1_2_padded_hash.bin
             --table_output_file tfm_s_sic_tables.bin
             --encrypted_image_output_file tfm_s_encrypted.bin
             --image_version ${MCUBOOT_SECURITY_COUNTER_S}
@@ -745,10 +885,9 @@ if (RSE_XIP)
 
     target_compile_options(signing_layout_s
         PRIVATE
-            $<$<C_COMPILER_ID:GNU>:-E\;-xc>
+            $<$<C_COMPILER_ID:GNU,Clang>:-E\;-xc>
             $<$<C_COMPILER_ID:ARMClang>:-E\;-xc>
             $<$<C_COMPILER_ID:IAR>:--preprocess=ns\;$<TARGET_OBJECTS:signing_layout_s>>
-            $<$<C_COMPILER_ID:Clang>:-E\;-xc>
     )
     target_compile_definitions(signing_layout_s
         PRIVATE
@@ -764,10 +903,11 @@ if (RSE_XIP)
     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tfm_s_sic_tables_signed.bin
         DEPENDS tfm_s_sic_tables
         DEPENDS tfm_s_bin signing_layout_s
+        DEPENDS $<$<BOOL:${MCUBOOT_ENC_IMAGES}>:${MCUBOOT_KEY_ENC}>
         WORKING_DIRECTORY ${MCUBOOT_PATH}/scripts
 
         #Sign secure binary image with provided secret key
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/bl2/ext/mcuboot/scripts/wrapper/wrapper.py
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/bl2/ext/mcuboot/scripts/wrapper.py
             -v ${MCUBOOT_IMAGE_VERSION_S}
             --layout $<TARGET_OBJECTS:signing_layout_s>
             -k ${MCUBOOT_KEY_S}
@@ -802,6 +942,7 @@ if (RSE_XIP)
 
     install(FILES       bl2/create_xip_tables.py
             FILES       bl2/kce_dm_dummy_encryption_key.bin
+            FILES       ${CMAKE_SOURCE_DIR}/bl1/bl1_1/dummy_guk.bin
             DESTINATION ${INSTALL_IMAGE_SIGNING_DIR}/scripts)
 
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/tools/modules
@@ -812,7 +953,7 @@ if (RSE_XIP)
             PATTERN "scripts/*.py"
             PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
             GROUP_EXECUTE GROUP_READ
-            PATTERN "scripts/wrapper/*.py"
+            PATTERN "scripts/*.py"
             PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
                         GROUP_EXECUTE GROUP_READ)
 
@@ -826,8 +967,16 @@ if (RSE_XIP)
             DESTINATION ${INSTALL_IMAGE_SIGNING_DIR}/keys)
 
     if (MCUBOOT_ENC_IMAGES)
+        # Specify the MCUBOOT_KEY_ENC path for NS build
+        set(MCUBOOT_INSTALL_KEY_ENC ${INSTALL_IMAGE_SIGNING_DIR}/keys/image_enc_key.pem CACHE FILEPATH "" FORCE)
         install(FILES ${MCUBOOT_KEY_ENC}
                 RENAME image_enc_key.pem
+                DESTINATION ${INSTALL_IMAGE_SIGNING_DIR}/keys)
+
+        # Specify the MCUBOOT_KEY_ENC_NS path for NS build
+        set(MCUBOOT_INSTALL_KEY_ENC_NS ${INSTALL_IMAGE_SIGNING_DIR}/keys/image_enc_ns_key.pem CACHE FILEPATH "" FORCE)
+        install(FILES ${MCUBOOT_KEY_ENC_NS}
+                RENAME image_enc_ns_key.pem
                 DESTINATION ${INSTALL_IMAGE_SIGNING_DIR}/keys)
     endif()
 endif()
@@ -849,18 +998,24 @@ add_custom_command(
     OUTPUT otp_dma_ics.bin
     OUTPUT rom_dma_ics.hex
     OUTPUT otp_dma_ics.hex
+    OUTPUT rom_dma_ics.csv
+    OUTPUT otp_dma_ics.csv
     OUTPUT ${bin_dir}/rom_dma_ics.bin
     OUTPUT ${bin_dir}/otp_dma_ics.bin
     OUTPUT ${bin_dir}/rom_dma_ics.hex
     OUTPUT ${bin_dir}/otp_dma_ics.hex
+    OUTPUT ${bin_dir}/rom_dma_ics.csv
+    OUTPUT ${bin_dir}/otp_dma_ics.csv
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/bl1/scripts/create_bl1_1_dma_bin.py
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/bl1/scripts/create_bl1_1_dma_bin.py
-                    --input_file ${CMAKE_CURRENT_SOURCE_DIR}/bl1/scripts/dma_config.yaml
+                    --input_file ${RSE_DMA_ICS_CONFIG_PATH}
                     --output_dir ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/rom_dma_ics.bin $<TARGET_FILE_DIR:bl1_1>
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/otp_dma_ics.bin $<TARGET_FILE_DIR:bl1_1>
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/rom_dma_ics.hex $<TARGET_FILE_DIR:bl1_1>
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/otp_dma_ics.hex $<TARGET_FILE_DIR:bl1_1>
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/rom_dma_ics.csv $<TARGET_FILE_DIR:bl1_1>
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/otp_dma_ics.csv $<TARGET_FILE_DIR:bl1_1>
 )
 
 ############################## OTP Layout ######################################
@@ -877,7 +1032,7 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/config/otp_config.pickle
     DEPENDS ${RSE_SUBPLATFORM_PAL_CONFIG_DIR}/rse_otp_config.h
     DEPENDS ${PLATFORM_DIR}/ext/target/arm/drivers/lcm/lcm_otp_layout.h
     COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${CMAKE_SOURCE_DIR}/tools/modules
-        ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/modules/otp_config.py
+        rse_create_otp_config
         --rse_otp_layout_h_file=${CMAKE_CURRENT_SOURCE_DIR}/rse_otp_layout.h
         --compile_commands_file=${CMAKE_BINARY_DIR}/compile_commands.json
         --otp_config_output_file=${CMAKE_CURRENT_BINARY_DIR}/config/otp_config.pickle
@@ -906,8 +1061,13 @@ install(FILES       ${CMAKE_CURRENT_BINARY_DIR}/config/otp_layout.csv
 
 ############################## Routing tables ##################################
 
-if (RSE_AMOUNT GREATER 1)
+if (SFCP_NUMBER_NODES GREATER 1)
     target_sources(platform_bl1_1
+        PRIVATE
+            ./rse_get_routing_tables.c
+    )
+
+    target_sources(platform_s
         PRIVATE
             ./rse_get_routing_tables.c
     )
@@ -949,12 +1109,47 @@ if (RSE_AMOUNT GREATER 1)
             PRIVATE
                 ${CMAKE_CURRENT_BINARY_DIR}/rse_system_routing_tables_definition.c
         )
+
+        add_dependencies(platform_s routing_tables_definition_source_file)
+
+        target_sources(platform_s
+            PRIVATE
+                ${CMAKE_CURRENT_BINARY_DIR}/rse_system_routing_tables_definition.c
+        )
     endif()
 endif()
 
+add_custom_target(error_codes_mapping
+    ALL
+    SOURCES ${CMAKE_CURRENT_BINARY_DIR}/config/error_codes_mapping.csv
+)
+
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/config/error_codes_mapping.csv
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/scripts/error_codes_config.py
+    DEPENDS ${RSE_SUBPLATFORM_PAL_CONFIG_DIR}/rse_otp_config.h
+    COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${CMAKE_SOURCE_DIR}/tools/modules
+        ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/error_codes_config.py
+            --error_code_output_file=${CMAKE_CURRENT_BINARY_DIR}/config/error_codes_mapping.csv
+            --compile_commands_file=${CMAKE_BINARY_DIR}/compile_commands.json
+            --c_compiler=${CMAKE_C_COMPILER}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../rse/common/platform_error_codes.h:tfm_plat_err_t
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../drivers/kmu/kmu_drv.h:kmu_error_t
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../drivers/lcm/lcm_drv.h:lcm_error_t
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../rse/common/native_drivers/mhu_v2_x.h:mhu_v2_x_error_t
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../rse/common/native_drivers/mhu_v3_x.h:mhu_v3_x_error_t
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../rse/common/native_drivers/mhu.h:mhu_error_t
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../rse/common/native_drivers/atu_rse_drv.h:atu_error_t
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../rse/common/native_drivers/integrity_checker_drv.h:integrity_checker_error_t
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../drivers/dcsu/include/dcsu_drv.h:dcsu_error_t
+            ${CC3XX_DRIVER_PATH}/common/cc3xx_error.h:cc3xx_error
+)
+
+install(FILES       ${CMAKE_CURRENT_BINARY_DIR}/config/error_codes_mapping.csv
+        DESTINATION ${INSTALL_PLATFORM_NS_DIR}/config)
+
 #========================= Files for building NS side platform ================#
 
-if (RSE_LOAD_NS_IMAGE)
+if (TFM_LOAD_NS_IMAGE)
     install(FILES       device/source/device_definition.c
                         $<$<BOOL:${RSE_DEFAULT_CLOCK_CONFIG}>:${CMAKE_CURRENT_SOURCE_DIR}/device/source/rse_clocks.c>
                         device/source/startup_rse.c
@@ -986,6 +1181,7 @@ if (RSE_LOAD_NS_IMAGE)
                         ${PLATFORM_DIR}/ext/target/arm/drivers/mpu/armv8m/mpu_armv8m_drv.h
                         ${PLATFORM_DIR}/ext/target/arm/drivers/timer/armv8m/systimer_armv8-m_drv.h
                         ${PLATFORM_DIR}/ext/target/arm/drivers/gpio/pl061/gpio_pl061_drv.h
+                        ${PLATFORM_DIR}/ext/target/arm/drivers/watchdog/arm_watchdog_drv.h
             DESTINATION ${INSTALL_PLATFORM_NS_DIR}/native_drivers
     )
 
@@ -1006,7 +1202,7 @@ if (RSE_LOAD_NS_IMAGE)
     )
 
     install(DIRECTORY   ${RSE_SUBPLATFORM_PAL_CONFIG_DIR}/
-            DESTINATION ${INSTALL_PLATFORM_NS_DIR}/subplatform_pal_config
+            DESTINATION ${INSTALL_PLATFORM_NS_DIR}/config
     )
 
     install(DIRECTORY   ${BL1_1_CONFIG_DIR}/
@@ -1018,11 +1214,11 @@ if (RSE_LOAD_NS_IMAGE)
     )
 
     install(FILES       rse_otp_check_config.h
-            DESTINATION ${INSTALL_PLATFORM_NS_DIR}/subplatform_pal_config/
+            DESTINATION ${INSTALL_PLATFORM_NS_DIR}/config
     )
 
     install(FILES       rse_rotpk_auto_generated_mappings.h
-            DESTINATION ${INSTALL_PLATFORM_NS_DIR}/subplatform_pal_config/
+            DESTINATION ${INSTALL_PLATFORM_NS_DIR}/config
     )
 
     install(FILES       target_cfg.h
@@ -1046,6 +1242,9 @@ if (RSE_LOAD_NS_IMAGE)
     install(FILES       check_config.cmake
             DESTINATION ${INSTALL_PLATFORM_NS_DIR})
 
+    install(FILES       config_tfm_target_rse_common.h
+            DESTINATION ${INSTALL_PLATFORM_NS_DIR}/partition)
+
     # Install linker scripts
     install(FILES       ${PLATFORM_DIR}/ext/common/gcc/tfm_common_ns.ld
                         ${PLATFORM_DIR}/ext/common/armclang/tfm_common_ns.sct
@@ -1053,5 +1252,7 @@ if (RSE_LOAD_NS_IMAGE)
             DESTINATION ${INSTALL_PLATFORM_NS_DIR}/linker_scripts)
 
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ns/config.cmake.in
-                   ${INSTALL_PLATFORM_NS_DIR}/config.cmake @ONLY)
+                   ${CMAKE_BINARY_DIR}/generated/platform/cmake/config.cmake @ONLY)
+    install(FILES       ${CMAKE_BINARY_DIR}/generated/platform/cmake/config.cmake
+            DESTINATION ${INSTALL_PLATFORM_NS_DIR})
 endif()

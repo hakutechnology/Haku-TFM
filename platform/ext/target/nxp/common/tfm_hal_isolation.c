@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
- * Copyright 2020-2022 NXP. All rights reserved.
+ * Copyright 2020-2022, 2025 NXP
  * Copyright (c) 2024 Cypress Semiconductor Corporation (an Infineon
  * company) or an affiliate of Cypress Semiconductor Corporation. All rights
  * reserved.
@@ -12,7 +12,7 @@
 #include <arm_cmse.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "array.h"
+#include "tfm_utils.h"
 #include "tfm_hal_device_header.h"
 #include "Driver_Common.h"
 #include "mmio_defs.h"
@@ -27,6 +27,7 @@
 #include "load/asset_defs.h"
 #include "load/spm_load_api.h"
 #include "fih.h"
+#include "tfm_log.h"
 
 extern const struct memory_region_limits memory_regions;
 
@@ -126,7 +127,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_set_up_static_boundaries(
 
     /* Set up static isolation boundaries inside SPE */
 #ifdef CONFIG_TFM_ENABLE_MEMORY_PROTECT
-    fih_int fih_rc = FIH_FAILURE;
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
     struct mpu_armv8m_dev_t dev_mpu_s = { MPU_BASE };
 
     mpu_armv8m_clean(&dev_mpu_s);
@@ -146,7 +147,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_set_up_static_boundaries(
         isolation_regions[i].region_nr = i;
         /* Enable regions */
         FIH_CALL(mpu_armv8m_region_enable, fih_rc, &dev_mpu_s, &isolation_regions[i]);
-        if (fih_not_eq(fih_rc, fih_int_encode(MPU_ARMV8M_OK))) {
+        if (FIH_NOT_EQ(fih_rc, (MPU_ARMV8M_OK))) {
             FIH_RET(fih_int_encode(TFM_HAL_ERROR_GENERIC));
         }
     }
@@ -164,7 +165,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_set_up_static_boundaries(
     region_cfg.attr_sh = MPU_ARMV8M_SH_NONE;
     region_cfg.attr_exec = MPU_ARMV8M_XN_EXEC_OK;
     FIH_CALL(mpu_armv8m_region_enable, fih_rc, &dev_mpu_s, &region_cfg);
-    if (fih_not_eq(fih_rc, fih_int_encode(MPU_ARMV8M_OK))) {
+    if (FIH_NOT_EQ(fih_rc, (MPU_ARMV8M_OK))) {
         FIH_RET(fih_int_encode(TFM_HAL_ERROR_GENERIC));
     }
     n_configured_regions++;
@@ -186,7 +187,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_set_up_static_boundaries(
     region_cfg.attr_sh = MPU_ARMV8M_SH_NONE;
     region_cfg.attr_exec = MPU_ARMV8M_XN_EXEC_OK;
     FIH_CALL(mpu_armv8m_region_enable, fih_rc, &dev_mpu_s, &region_cfg);
-    if (fih_not_eq(fih_rc, fih_int_encode(MPU_ARMV8M_OK))) {
+    if (FIH_NOT_EQ(fih_rc, (MPU_ARMV8M_OK))) {
         FIH_RET(fih_int_encode(TFM_HAL_ERROR_GENERIC));
     }
     n_configured_regions++;
@@ -208,7 +209,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_set_up_static_boundaries(
     region_cfg.attr_sh = MPU_ARMV8M_SH_NONE;
     region_cfg.attr_exec = MPU_ARMV8M_XN_EXEC_OK;
     FIH_CALL(mpu_armv8m_region_enable, fih_rc, &dev_mpu_s, &region_cfg);
-    if (fih_not_eq(fih_rc, fih_int_encode(MPU_ARMV8M_OK))) {
+    if (FIH_NOT_EQ(fih_rc, (MPU_ARMV8M_OK))) {
         FIH_RET(fih_int_encode(TFM_HAL_ERROR_GENERIC));
     }
     n_configured_regions++;
@@ -230,7 +231,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_set_up_static_boundaries(
     region_cfg.attr_sh = MPU_ARMV8M_SH_NONE;
     region_cfg.attr_exec = MPU_ARMV8M_XN_EXEC_NEVER;
     FIH_CALL(mpu_armv8m_region_enable, fih_rc, &dev_mpu_s, &region_cfg);
-    if (fih_not_eq(fih_rc, fih_int_encode(MPU_ARMV8M_OK))) {
+    if (FIH_NOT_EQ(fih_rc, (MPU_ARMV8M_OK))) {
         FIH_RET(fih_int_encode(TFM_HAL_ERROR_GENERIC));
     }
     n_configured_regions++;
@@ -250,7 +251,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_set_up_static_boundaries(
     region_cfg.attr_sh = MPU_ARMV8M_SH_NONE;
     region_cfg.attr_exec = MPU_ARMV8M_XN_EXEC_NEVER;
     FIH_CALL(mpu_armv8m_region_enable, fih_rc, &dev_mpu_s, &region_cfg);
-    if (fih_not_eq(fih_rc, fih_int_encode(MPU_ARMV8M_OK))) {
+    if (FIH_NOT_EQ(fih_rc, (MPU_ARMV8M_OK))) {
         FIH_RET(fih_int_encode(TFM_HAL_ERROR_GENERIC));
     }
     n_configured_regions++;
@@ -273,7 +274,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_set_up_static_boundaries(
     region_cfg.attr_sh = MPU_ARMV8M_SH_NONE;
     region_cfg.attr_exec = MPU_ARMV8M_XN_EXEC_NEVER;
     FIH_CALL(mpu_armv8m_region_enable, fih_rc, &dev_mpu_s, &region_cfg);
-    if (fih_not_eq(fih_rc, fih_int_encode(MPU_ARMV8M_OK))) {
+    if (FIH_NOT_EQ(fih_rc, (MPU_ARMV8M_OK))) {
         FIH_RET(fih_int_encode(TFM_HAL_ERROR_GENERIC));
     }
     n_configured_regions++;
@@ -283,7 +284,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_set_up_static_boundaries(
     /* Enable MPU */
     FIH_CALL(mpu_armv8m_enable, fih_rc, &dev_mpu_s,
              PRIVILEGED_DEFAULT_ENABLE, HARDFAULT_NMI_ENABLE);
-    if (fih_not_eq(fih_rc, fih_int_encode(MPU_ARMV8M_OK))) {
+    if (FIH_NOT_EQ(fih_rc, (MPU_ARMV8M_OK))) {
         FIH_RET(fih_int_encode(TFM_HAL_ERROR_GENERIC));
     }
 #endif
@@ -341,7 +342,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_bind_boundary(
     struct platform_data_t *plat_data_ptr;
 #if TFM_ISOLATION_LEVEL == 2
     struct mpu_armv8m_region_cfg_t localcfg;
-    fih_int fih_rc = FIH_FAILURE;
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
 #endif
 
     if (!p_ldinf || !p_boundary) {
@@ -396,7 +397,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_bind_boundary(
             localcfg.region_nr = n_configured_regions++;
 
             FIH_CALL(mpu_armv8m_region_enable, fih_rc, &dev_mpu_s, &localcfg);
-            if (fih_not_eq(fih_rc, fih_int_encode(MPU_ARMV8M_OK))) {
+            if (FIH_NOT_EQ(fih_rc, (MPU_ARMV8M_OK))) {
                 FIH_RET(fih_int_encode(TFM_HAL_ERROR_GENERIC));
             }
         }
@@ -440,7 +441,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_activate_boundary(
     bool privileged = !!(local_handle & HANDLE_ATTR_PRIV_MASK);
 #if TFM_ISOLATION_LEVEL == 3
     bool is_spm = !!(local_handle & HANDLE_ATTR_SPM_MASK);
-    fih_int fih_rc = FIH_FAILURE;
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
     struct mpu_armv8m_region_cfg_t localcfg;
     uint32_t i, mmio_index;
     struct platform_data_t *plat_data_ptr;
@@ -487,7 +488,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_activate_boundary(
             FIH_RET(fih_int_encode(TFM_HAL_ERROR_GENERIC));
         }
         FIH_CALL(mpu_armv8m_region_enable, fih_rc, &dev_mpu_s, &localcfg);
-        if (fih_not_eq(fih_rc, fih_int_encode(MPU_ARMV8M_OK))) {
+        if (FIH_NOT_EQ(fih_rc, (MPU_ARMV8M_OK))) {
             FIH_RET(fih_int_encode(TFM_HAL_ERROR_GENERIC));
         }
     }
@@ -511,7 +512,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_activate_boundary(
         localcfg.region_limit = plat_data_ptr->periph_limit;
 
         FIH_CALL(mpu_armv8m_region_enable, fih_rc, &dev_mpu_s, &localcfg);
-        if (fih_not_eq(fih_rc, fih_int_encode(MPU_ARMV8M_OK))) {
+        if (FIH_NOT_EQ(fih_rc, (MPU_ARMV8M_OK))) {
             FIH_RET(fih_int_encode(TFM_HAL_ERROR_GENERIC));
         }
 
@@ -522,7 +523,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_activate_boundary(
     /* Disable unused regions */
     while (i < MPU_REGION_NUM) {
         FIH_CALL(mpu_armv8m_region_disable, fih_rc, &dev_mpu_s, i++);
-        if (fih_not_eq(fih_rc, fih_int_encode(MPU_ARMV8M_OK))) {
+        if (FIH_NOT_EQ(fih_rc, (MPU_ARMV8M_OK))) {
             FIH_RET(fih_int_encode(TFM_HAL_ERROR_GENERIC));
         }
     }
@@ -591,53 +592,77 @@ FIH_RET_TYPE(bool) tfm_hal_boundary_need_switch(uintptr_t boundary_from,
 
 /*------------------- SAU/IDAU configuration functions -----------------------*/
 
-void sau_and_idau_cfg(void)
+__attribute__((weak)) void sau_and_idau_cfg(void)
 {
     /* Ensure all memory accesses are completed */
     __DMB();
 
-    /* Enables SAU */
-    TZ_SAU_Enable();
+    /* Enables SAU Control register: Enable SAU and All Secure (applied only if disabled) */
+    SECURE_WRITE_REGISTER(&(SAU->CTRL), ((1U << SAU_CTRL_ENABLE_Pos) & SAU_CTRL_ENABLE_Msk));
 
     /* Configures SAU regions to be non-secure */
-    SAU->RNR  = 0U;
+    SECURE_WRITE_REGISTER(&(SAU->RNR), 0U);
     SAU->RBAR = (memory_regions.non_secure_partition_base
                 & SAU_RBAR_BADDR_Msk);
     SAU->RLAR = (memory_regions.non_secure_partition_limit
                 & SAU_RLAR_LADDR_Msk)
                 | SAU_RLAR_ENABLE_Msk;
 
-    SAU->RNR  = 1U;
-    SAU->RBAR = (NS_DATA_START & SAU_RBAR_BADDR_Msk);
-    SAU->RLAR = (NS_DATA_LIMIT & SAU_RLAR_LADDR_Msk) | SAU_RLAR_ENABLE_Msk;
+    /* Configures Non secure data start region */
+    SECURE_WRITE_REGISTER(&(SAU->RNR), 1U);
+    SECURE_WRITE_REGISTER(&(SAU->RBAR), (NS_DATA_START & SAU_RBAR_BADDR_Msk));
+    SECURE_WRITE_REGISTER(&(SAU->RLAR), ((NS_DATA_LIMIT & SAU_RLAR_LADDR_Msk) | SAU_RLAR_ENABLE_Msk));
 
     /* Configures veneers region to be non-secure callable */
-    SAU->RNR  = 2U;
+    SECURE_WRITE_REGISTER(&(SAU->RNR), 2U);
     SAU->RBAR = (memory_regions.veneer_base  & SAU_RBAR_BADDR_Msk);
     SAU->RLAR = (memory_regions.veneer_limit & SAU_RLAR_LADDR_Msk)
                 | SAU_RLAR_ENABLE_Msk
                 | SAU_RLAR_NSC_Msk;
 
     /* Configure the peripherals space */
-    SAU->RNR  = 3U;
-    SAU->RBAR = (PERIPHERALS_BASE_NS_START & SAU_RBAR_BADDR_Msk);
-    SAU->RLAR = (PERIPHERALS_BASE_NS_END & SAU_RLAR_LADDR_Msk)
-                | SAU_RLAR_ENABLE_Msk;
-
+    SECURE_WRITE_REGISTER(&(SAU->RNR), 3U);
+    SECURE_WRITE_REGISTER(&(SAU->RBAR), (PERIPHERALS_BASE_NS_START & SAU_RBAR_BADDR_Msk));
+    SECURE_WRITE_REGISTER(&(SAU->RLAR), ((PERIPHERALS_BASE_NS_END & SAU_RLAR_LADDR_Msk)
+                                         | SAU_RLAR_ENABLE_Msk));
 #ifdef BL2
     /* Secondary image partition */
-    SAU->RNR  = 4U;
+    SECURE_WRITE_REGISTER(&(SAU->RNR), 4U);
     SAU->RBAR = (memory_regions.secondary_partition_base  & SAU_RBAR_BADDR_Msk);
     SAU->RLAR = (memory_regions.secondary_partition_limit & SAU_RLAR_LADDR_Msk)
                 | SAU_RLAR_ENABLE_Msk;
 #endif /* BL2 */
+
+#ifdef TFM_WIFI_FLASH_REGION
+    /* Wifi Flash region */
+    SECURE_WRITE_REGISTER(&(SAU->RNR), 5U);
+    SAU->RBAR = (memory_regions.wifi_flash_region_base & SAU_RBAR_BADDR_Msk);
+    SAU->RLAR = (memory_regions.wifi_flash_region_limit & SAU_RLAR_LADDR_Msk)
+	            | SAU_RLAR_ENABLE_Msk;
+#endif /* TFM_WIFI_FLASH_REGION */
+
+#ifdef TFM_EL2GO_DATA_IMPORT_REGION
+    /* EL2GO data import region */
+    SECURE_WRITE_REGISTER(&(SAU->RNR), 6U);
+    SAU->RBAR = (memory_regions.el2go_data_import_region_base & SAU_RBAR_BADDR_Msk);
+    SAU->RLAR = (memory_regions.el2go_data_import_region_limit & SAU_RLAR_LADDR_Msk)
+	           | SAU_RLAR_ENABLE_Msk;
+#endif /* TFM_EL2GO_DATA_IMPORT_REGION */
+
+#ifdef TFM_EL2GO_CMPA_REGION
+    /* EL2GO data import region */
+    SECURE_WRITE_REGISTER(&(SAU->RNR), 7U);
+    SAU->RBAR = (memory_regions.el2go_cmpa_region_base & SAU_RBAR_BADDR_Msk);
+    SAU->RLAR = (memory_regions.el2go_cmpa_region_limit & SAU_RLAR_LADDR_Msk)
+	           | SAU_RLAR_ENABLE_Msk;
+#endif /* TFM_EL2GO_CMPA_REGION */
 
     /* Ensure the write is completed and flush pipeline */
     __DSB();
     __ISB();
 }
 
-void ppc_configure_to_secure(struct platform_data_t *platform_data, bool privileged)
+__attribute__((weak)) void ppc_configure_to_secure(struct platform_data_t *platform_data, bool privileged)
 {
 #ifdef AHB_SECURE_CTRL
     /* Clear NS flag for peripheral to prevent NS access */
@@ -650,29 +675,6 @@ void ppc_configure_to_secure(struct platform_data_t *platform_data, bool privile
          */
         /* Set to secure and privileged user access 0x3. */
         *platform_data->periph_ppc_bank = (*platform_data->periph_ppc_bank) | (((privileged == true)?0x3:0x2) << (platform_data->periph_ppc_loc));
-    }
-#endif
-#ifdef TRDC
-    /* If the peripheral is not shared with non-secure world, give it SEC access */
-    if (platform_data && platform_data->nseEnable == false)
-    {
-        trdc_mbc_memory_block_config_t mbcBlockConfig;
-
-        (void)memset(&mbcBlockConfig, 0, sizeof(mbcBlockConfig));
-
-        mbcBlockConfig.nseEnable  = false;
-
-        mbcBlockConfig.domainIdx = 0;       /* Core domain */
-        mbcBlockConfig.mbcIdx = platform_data->mbcIdx;
-        mbcBlockConfig.slaveMemoryIdx = platform_data->slaveMemoryIdx;
-        mbcBlockConfig.memoryBlockIdx = platform_data->memoryBlockIdx;
-
-        if (privileged == true)
-            mbcBlockConfig.memoryAccessControlSelect = TRDC_ACCESS_CONTROL_POLICY_SEC_PRIV_INDEX;
-        else
-            mbcBlockConfig.memoryAccessControlSelect = TRDC_ACCESS_CONTROL_POLICY_SEC_INDEX;
-
-        TRDC_MbcSetMemoryBlockConfig(TRDC, &mbcBlockConfig);
     }
 #endif
 }
@@ -702,3 +704,15 @@ fih_int tfm_hal_verify_static_boundaries(void)
     FIH_RET(fih_int_encode(result));
 }
 #endif /* TFM_FIH_PROFILE_ON */
+
+/* HARDENING_MACROS_ENABLED is defined*/
+#ifdef HARDENING_MACROS_ENABLED
+
+/* fault_detect handling function
+ */
+__attribute__((used)) static void fault_detect_handling(void)
+{
+    VERBOSE_RAW("fault detected during secure REG write!!\n");
+    tfm_core_panic();
+}
+#endif

@@ -9,4 +9,4 @@
 # current TF-M version.
 # TF-M does not rely on this file to build.
 
-version=3e440b669
+version=TF-Mv2.3.0

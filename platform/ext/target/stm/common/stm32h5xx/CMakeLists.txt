@@ -152,9 +152,27 @@ if(BL2)
             ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32h5xx_hal_rtc_ex.c
             ${CMAKE_CURRENT_SOURCE_DIR}/hal/Src/stm32h5xx_hal_icache.c
             ${STM_COMMON_DIR}/hal/Native_Driver/low_level_rng.c
-            ${STM_COMMON_DIR}/hal/provision/otp_provision.c
-            ${STM_COMMON_DIR}/hal/provision/nvm_init.c
-            ${STM_COMMON_DIR}/hal/provision/nvmcnt_init.c
+    )
+
+    # Add sources TF-PSA-Crypto for BL2
+    target_sources(bl2
+        PRIVATE
+            ${TF_PSA_CRYPTO_PATH}/utilities/constant_time.c
+            ${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/cipher.c
+            ${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/cipher_wrap.c
+            ${TF_PSA_CRYPTO_PATH}/drivers/builtin/src/psa_crypto_cipher.c
+    )
+
+    target_include_directories(bl2
+        PRIVATE
+            ${TF_PSA_CRYPTO_PATH}/utilities
+            ${TF_PSA_CRYPTO_PATH}/drivers/builtin/include
+    )
+
+    # for BL2 Crypto: provide mbedtls_psa_external_get_random()
+    target_sources(bl2_crypto
+        PRIVATE
+            ${STM_COMMON_DIR}/hal/accelerator/rng.c
     )
 
     target_compile_options(platform_bl2

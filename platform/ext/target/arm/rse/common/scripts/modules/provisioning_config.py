@@ -6,16 +6,15 @@
 #
 #-------------------------------------------------------------------------------
 
-import c_struct
-import c_macro
-import c_include
+
+from tfm_tools.c_struct import C_array, C_enum, C_struct
+from tfm_tools.c_macro import C_macro
+from tfm_tools import c_include
+from tfm_tools import arg_utils
 import pickle
-import sys
-from c_struct import C_array, C_enum
-import arg_utils
 import argparse
-from otp_config import OTP_config
-from routing_tables import Routing_tables
+from rse.otp_config import OTP_config
+from rse.routing_tables import Routing_tables
 from cryptography.hazmat.primitives import hashes
 
 import logging
@@ -23,9 +22,10 @@ logger = logging.getLogger("TF-M.{}".format(__name__))
 
 from cryptography.hazmat.primitives.serialization import load_der_public_key, Encoding, PublicFormat
 
-from crypto_conversion_utils import convert_hash_define
+from tfm_tools.crypto_conversion_utils import convert_hash_define
 
-all_regions = ['non_endorsed_dm', 'non_secret_cm', 'secret_cm', 'non_secret_dm', 'secret_dm']
+all_regions = ['rotpk_revocation_cm', 'rotpk_revocation_dm', 'non_secret_cm',
+               'secret_cm', 'non_secret_dm', 'secret_dm']
 
 def _get_rotpk_area_index(f : str):
     try:
@@ -233,10 +233,14 @@ def _handle_rotpk(args: argparse.Namespace,
         hash_alg = getattr(provisioning_config,
                            "{}_rotpk_hash_algs".format(field_owner))[area_index, rotpk_index]
         hash_alg = convert_hash_define(hash_alg, "RSE_ROTPK_HASH_ALG_")
-        digest = hashes.Hash(hash_alg())
-        digest.update(v)
-        out = digest.finalize()
-        logger.info("Hashed public key {} with value {} using alg {} to hash {}".format(f, v.hex(), hash_alg.name, out.hex()))
+        if len(v) != hash_alg.digest_size:
+            digest = hashes.Hash(hash_alg())
+            digest.update(v)
+            out = digest.finalize()
+            logger.info("Hashed public key {} with value {} using alg {} to hash {}".format(f, v.hex(), hash_alg.name, out.hex()))
+        else:
+            out = v
+            logger.info("Using pre-hashed value {} for public key {}".format(out.hex(), f))
         return out
     else:
         type = getattr(provisioning_config, "{}_rotpk_type".format(field_owner))[rotpk_index]
@@ -298,6 +302,9 @@ def parse_args(args : argparse.Namespace,
             continue
 
         try:
+            if not hasattr(v, '__len__'):
+                logger.debug("Not setting length for {}:{} as it has no length".format(field_owner, f))
+                continue
             getattr(out["provisioning_config"], "{}_layout".format(field_owner)).get_field(f + "_size").set_value(len(v))
         except KeyError:
             logger.debug("Not setting length for {}:{} as no key matches {}_len".format(field_owner, f, f))
@@ -306,9 +313,10 @@ def parse_args(args : argparse.Namespace,
     return out;
 
 class Provisioning_config:
-    def __init__(self, non_endorsed_dm, non_secret_cm, secret_cm,
+    def __init__(self, rotpk_revocation_cm, rotpk_revocation_dm, non_secret_cm, secret_cm,
                  non_secret_dm, secret_dm, defines, enums):
-        self.non_endorsed_dm_layout = non_endorsed_dm
+        self.rotpk_revocation_cm_layout = rotpk_revocation_cm
+        self.rotpk_revocation_dm_layout = rotpk_revocation_dm
         self.non_secret_cm_layout = non_secret_cm
         self.secret_cm_layout = secret_cm
         self.non_secret_dm_layout = non_secret_dm
@@ -320,30 +328,33 @@ class Provisioning_config:
         self.enums = enums
         for e in self.enums:
             self.__dict__ |= self.enums[e].dict
-        self.non_endorsed_dm_rotpk_hash_algs = {}
+        self.rotpk_revocation_cm_rotpk_hash_algs = {}
+        self.rotpk_revocation_dm_rotpk_hash_algs = {}
         self.non_secret_cm_rotpk_hash_algs = {}
         self.secret_cm_rotpk_hash_algs = {}
         self.non_secret_dm_rotpk_hash_algs = {}
         self.secret_dm_rotpk_hash_algs = {}
-        self.non_endorsed_dm_rotpk_types = {}
+        self.rotpk_revocation_cm_rotpk_types = {}
+        self.rotpk_revocation_dm_rotpk_types = {}
         self.non_secret_cm_rotpk_types = {}
         self.secret_cm_rotpk_types = {}
         self.non_secret_dm_rotpk_types = {}
         self.secret_dm_rotpk_types = {}
 
     @staticmethod
-    def from_h_file(h_file_path, policy_h_file_path, includes, defines):
-        make_region = lambda x: c_struct.C_struct.from_h_file(h_file_path,
+    def from_h_file(h_file_path, policy_h_file_path, compiler, includes, defines):
+        make_region = lambda x: C_struct.from_h_file(h_file_path,
                                                               "rse_{}_provisioning_values_t".format(x),
+                                                              compiler,
                                                               includes, defines)
         regions = [make_region(x) for x in all_regions]
-        config = c_macro.C_macro.from_h_file(h_file_path, includes, defines)
+        config = C_macro.from_h_file(h_file_path, includes, defines)
 
-        rotpk_types = c_struct.C_enum.from_h_file(policy_h_file_path, "rse_rotpk_type", includes, defines)
-        rotpk_policies = c_struct.C_enum.from_h_file(policy_h_file_path, "rse_rotpk_policy", includes, defines)
-        rotpk_hash_algs = c_struct.C_enum.from_h_file(policy_h_file_path, "rse_rotpk_hash_alg", includes, defines)
+        rotpk_types = C_enum.from_h_file(policy_h_file_path, "rse_rotpk_type", compiler, includes, defines)
+        rotpk_policies = C_enum.from_h_file(policy_h_file_path, "rse_rotpk_policy", compiler, includes, defines)
+        rotpk_hash_algs = C_enum.from_h_file(policy_h_file_path, "rse_rotpk_hash_alg", compiler, includes, defines)
 
-        create_enum = lambda x:c_struct.C_enum.from_h_file(policy_h_file_path, x, includes, defines)
+        create_enum = lambda x:C_enum.from_h_file(policy_h_file_path, x, compiler, includes, defines)
         enum_names = [
             'rse_rotpk_type',
             'rse_rotpk_policy',
@@ -411,15 +422,13 @@ provisioning bundles, or to allow other scripts to access the provisioning
 configuration options.
 """
 if __name__ == "__main__":
-    import argparse
-    import c_include
 
     parser = argparse.ArgumentParser(allow_abbrev=False,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description=script_description)
-    parser.add_argument("--rse_provisioning_layout_h_file", help="path to rse_provisioning_layout.h", type=arg_utils.arg_type_filepath, required=True)
-    parser.add_argument("--rse_rotpk_policy_h_file", help="path to rse_rotpk_policy.h", type=arg_utils.arg_type_filepath, required=True)
-    parser.add_argument("--compile_commands_file", help="path to compile_commands.json", type=arg_utils.arg_type_filepath, required=True)
+    parser.add_argument("--rse_provisioning_layout_h_file", help="path to rse_provisioning_layout.h", type=arg_utils.arg_type_input_filepath, required=True)
+    parser.add_argument("--rse_rotpk_policy_h_file", help="path to rse_rotpk_policy.h", type=arg_utils.arg_type_input_filepath, required=True)
+    parser.add_argument("--compile_commands_file", help="path to compile_commands.json", type=arg_utils.arg_type_input_filepath, required=True)
     parser.add_argument("--provisioning_config_output_file", help="file to output provisioning config to", required=True)
     parser.add_argument("--log_level", help="log level", required=False, default="ERROR", choices=logging._levelToName.values())
 
@@ -428,9 +437,10 @@ if __name__ == "__main__":
     logging.getLogger("TF-M").setLevel(args.log_level)
     logger.addHandler(logging.StreamHandler())
 
+    compiler = c_include.get_compiler(args.compile_commands_file, "otp_lcm.c")
     includes = c_include.get_includes(args.compile_commands_file, "otp_lcm.c")
     defines = c_include.get_defines(args.compile_commands_file, "otp_lcm.c")
 
-    provisioning_config = Provisioning_config.from_h_file(args.rse_provisioning_layout_h_file, args.rse_rotpk_policy_h_file, includes, defines)
+    provisioning_config = Provisioning_config.from_h_file(args.rse_provisioning_layout_h_file, args.rse_rotpk_policy_h_file, compiler, includes, defines)
 
     provisioning_config.to_config_file(args.provisioning_config_output_file)

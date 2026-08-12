@@ -27,6 +27,10 @@ extern "C" {
 #define BL2_ENCRYPTION_KEY_SIZE (32)
 #endif /* BL2_ENCRYPTION_KEY_SIZE */
 
+#ifndef TFM_BL1_2_SIGNER_AMOUNT
+#define TFM_BL1_2_SIGNER_AMOUNT 1
+#endif /* TFM_BL1_2_SIGNER_AMOUNT */
+
 /**
  * @brief Key IDs associated to usable keys by BL1
  *
@@ -35,6 +39,7 @@ enum tfm_bl1_key_id_t {
     TFM_BL1_KEY_HUK,
     TFM_BL1_KEY_GUK,
     TFM_BL1_KEY_BL2_ENCRYPTION,
+    TFM_BL1_KEY_IAK_SEED,
 
     TFM_BL1_KEY_ROTPK_0,
     TFM_BL1_KEY_ROTPK_MAX = TFM_BL1_KEY_ROTPK_0 + TFM_BL1_2_SIGNER_AMOUNT,

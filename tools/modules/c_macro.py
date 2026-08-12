@@ -8,10 +8,11 @@
 
 import re
 import ast
+import sys
 import os
 import operator as op
 import string
-from c_include import get_includes, get_defines
+from tfm_tools.c_include import get_includes, get_defines
 
 def _int(x):
     if isinstance(x, str):
@@ -54,6 +55,9 @@ def _replace_from_dict(s, d):
 def _eval_maths(expr):
     return _int(__eval_maths(expr))
 
+def ternary(cond, if_true, if_false):
+    return if_true if cond else if_false
+
 def __eval_maths(expr):
     def _bool_to_int(b):
         if isinstance(b, bool):
@@ -68,6 +72,7 @@ def __eval_maths(expr):
         return _eval_maths(s + str(_eval_maths(b)) + e)
 
     ops = {
+        ternary:   r"(.*)\?(.*):(.*)",
         op.or_:    r"(.*)\|\|(.*)",
         op.and_:   r"(.*)&&(.*)",
         op.ne:     r"(.*)!=(.*)",
@@ -128,13 +133,29 @@ def _get_next_line(text):
 
         yield yield_line
 
+def split_expr(expr: str):
+    # First split on whitespace
+    parts = expr.split()
+    tokens = []
+    for part in parts:
+        # For each chunk, split again on math symbols
+        for op in "()*/+-":
+            part = part.replace(op, f" {op} ")
+        tokens.extend(part.split())
+    return tokens
+
 def _replace_whole_word(text, target, replacement):
-    words = text.split()
+    custom_punct = string.punctuation.replace("_", "")
+    words = split_expr(text)
     new_words = [
-        word.replace(target, replacement) if word.strip(string.punctuation) == target else word
+        word.replace(target, replacement) if word.strip(custom_punct) == target else word
         for word in words
     ]
     return ' '.join(new_words)
+
+def contains_identifier(text: str, identifier: str) -> bool:
+        pattern = rf'(?<![A-Za-z0-9_]){re.escape(identifier)}(?![A-Za-z0-9_])'
+        return re.search(pattern, text) is not None
 
 class Conditional_block_state():
     """Represents the state of a conditional block (#if/elif/else)"""
@@ -184,7 +205,7 @@ class C_macro():
             if isinstance(v, str):
                 text = _replace_whole_word(text, d, v)
             else:
-                if d in text:
+                if contains_identifier(text, d):
                     s, me = text.split(d, 1)
                     _, m, e = _split_outer_brackets(me)
                     m = str(v(*[x.rstrip().lstrip() for x in m.split(",")]))
@@ -275,7 +296,7 @@ class C_macro():
 
     def _parse_error(self, x):
         print(x)
-        exit(1)
+        sys.exit(1)
 
     def parse_line(self, x):
         conditional_tokens = {
@@ -310,10 +331,10 @@ class C_macro():
 
     def _search_paths(self, h_file):
         for i in self._include_paths:
+            file_path = os.path.join(i, h_file)
             try:
-                dir_files = [f for f in os.listdir(i) if os.path.isfile(os.path.join(i, f))]
-                if h_file in dir_files:
-                    return os.path.join(i, h_file)
+                if os.path.isfile(file_path):
+                    return file_path
             except FileNotFoundError:
                 continue
         return h_file
@@ -330,17 +351,24 @@ class C_macro():
             self.parse_text(f.read())
         pass
 
-if __name__ == '__main__':
+def main():
     import argparse
 
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument("--h_file", help="header file to parse", required=True)
     parser.add_argument("--macro_name", help="macro name to evaluate", required=True)
-    parser.add_argument("--compile_commands_file", help="header file to parse", required=True)
-    parser.add_argument("--c_file_to_mirror_includes_from", help="name of the c file to take", required=True)
+    parser.add_argument("--compile_commands_file", help="path to compile_commands.json", required=True)
+    parser.add_argument("--c_file_to_mirror_includes_from", help="path to c file to take compile_commands includes from", required=True)
     args = parser.parse_args()
 
     includes = get_includes(args.compile_commands_file, args.c_file_to_mirror_includes_from)
     defines = get_defines(args.compile_commands_file, args.c_file_to_mirror_includes_from)
     s = C_macro.from_h_file(args.h_file, includes, defines)
-    print(s._definitions)
+    out = s._definitions[args.macro_name]
+    try:
+        print(hex(int(out)))
+    except ValueError:
+        print(out)
+
+if __name__ == '__main__':
+    sys.exit(main())

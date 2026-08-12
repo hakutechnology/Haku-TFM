@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, Arm Limited. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  * Copyright (c) 2022-2023 Cypress Semiconductor Corporation (an Infineon
  * company) or an affiliate of Cypress Semiconductor Corporation. All rights
  * reserved.
@@ -9,10 +9,11 @@
  */
 
 #include <arm_cmse.h>
+#include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "array.h"
+#include "tfm_utils.h"
 #include "tfm_hal_device_header.h"
 #include "region.h"
 #include "armv8m_mpu.h"
@@ -79,6 +80,10 @@ REGION_DECLARE(Image$$, TFM_SP_META_PTR_END, $$ZI$$Limit);
 #endif
 REGION_DECLARE(Image$$, PT_PSA_ROT_DATA_START, $$Base);
 REGION_DECLARE(Image$$, PT_PSA_ROT_DATA_END, $$Base);
+#ifdef CONFIG_TFM_REUSE_COPY_AREA_FOR_SP_STACKS
+REGION_DECLARE(Image$$, PT_OVERLAY_AREA_BEGIN, $$Base);
+REGION_DECLARE(Image$$, PT_OVERLAY_AREA_END, $$Base);
+#endif
 
 #define ARM_MPU_NON_TRANSIENT        ( 1U )
 #define ARM_MPU_TRANSIENT            ( 0U )
@@ -99,8 +104,7 @@ REGION_DECLARE(Image$$, PT_PSA_ROT_DATA_END, $$Base);
 
 #endif /* CONFIG_TFM_ENABLE_MEMORY_PROTECT */
 
-enum tfm_hal_status_t tfm_hal_set_up_static_boundaries(
-                                            uintptr_t *p_spm_boundary)
+FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_set_up_static_boundaries(uintptr_t *p_spm_boundary)
 {
 #ifdef CONFIG_TFM_ENABLE_MEMORY_PROTECT
 const ARM_MPU_Region_t mpu_region_attributes[] = {
@@ -262,6 +266,27 @@ const ARM_MPU_Region_t mpu_region_attributes[] = {
                      1)
         #endif
     },
+#ifdef CONFIG_TFM_REUSE_COPY_AREA_FOR_SP_STACKS
+    /* Overlay region
+     * Non-shareable, Read-Write, Unprivileged, Execute Never,
+     * Privileged Execute Never - if PXN available, Attribute set: 1
+     */
+    {
+        ARM_MPU_RBAR((uint32_t)&REGION_NAME(Image$$, PT_OVERLAY_AREA_BEGIN, $$Base),
+                     ARM_MPU_SH_NON,
+                     ARM_MPU_READ_WRITE,
+                     ARM_MPU_UNPRIVILEGED,
+                     ARM_MPU_EXECUTE_NEVER),
+        #ifdef TFM_PXN_ENABLE
+        ARM_MPU_RLAR_PXN((uint32_t)&REGION_NAME(Image$$, PT_OVERLAY_AREA_END, $$Base) - 1,
+                         ARM_MPU_PRIVILEGE_EXECUTE_NEVER,
+                         1)
+        #else
+        ARM_MPU_RLAR((uint32_t)&REGION_NAME(Image$$, PT_OVERLAY_AREA_END, $$Base) - 1,
+                     1)
+        #endif
+    },
+#endif
     /* Individual platforms may add further static MPU regions by defining
      * PLATFORM_STATIC_MPU_REGIONS in their tfm_peripherals_def.h header.
      */
@@ -274,10 +299,10 @@ const ARM_MPU_Region_t mpu_region_attributes[] = {
     /* Set up isolation boundaries between SPE and NSPE */
     sau_and_idau_cfg();
     if (mpc_init_cfg() != TFM_PLAT_ERR_SUCCESS) {
-        return TFM_HAL_ERROR_GENERIC;
+        FIH_RET(TFM_HAL_ERROR_GENERIC);
     }
     if (ppc_init_cfg() != TFM_PLAT_ERR_SUCCESS) {
-        return TFM_HAL_ERROR_GENERIC;
+        FIH_RET(TFM_HAL_ERROR_GENERIC);
     }
 
     /* Set up static isolation boundaries inside SPE */
@@ -289,7 +314,7 @@ const ARM_MPU_Region_t mpu_region_attributes[] = {
     n_static_regions = ARRAY_SIZE(mpu_region_attributes);
 
     if (n_static_regions + MIN_NR_PRIVATE_DATA_REGION > mpu_region_num) {
-        return TFM_HAL_ERROR_GENERIC;
+        FIH_RET(TFM_HAL_ERROR_GENERIC);
     }
 
     /* Turn off MPU during configuration */
@@ -343,7 +368,7 @@ const ARM_MPU_Region_t mpu_region_attributes[] = {
 
     *p_spm_boundary = (uintptr_t)PROT_BOUNDARY_VAL;
 
-    return TFM_HAL_SUCCESS;
+    FIH_RET(TFM_HAL_SUCCESS);
 }
 
 /*
@@ -384,9 +409,8 @@ const ARM_MPU_Region_t mpu_region_attributes[] = {
  * 3. Highest 8 bits are for index. It supports 256 unique handles at most.
  * 4. Only named MMIO regions are supported. Numbered MMIO regions are ignored.
  */
-enum tfm_hal_status_t tfm_hal_bind_boundary(
-                                    const struct partition_load_info_t *p_ldinf,
-                                    uintptr_t *p_boundary)
+FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_bind_boundary(const struct partition_load_info_t *p_ldinf,
+                                                          uintptr_t *p_boundary)
 {
     bool privileged;
     bool ns_agent_tz;
@@ -404,7 +428,7 @@ enum tfm_hal_status_t tfm_hal_bind_boundary(
 #endif /* CONFIG_TFM_MMIO_REGION_ENABLE == 1 */
 
     if (!p_ldinf || !p_boundary) {
-        return TFM_HAL_ERROR_GENERIC;
+        FIH_RET(TFM_HAL_ERROR_GENERIC);
     }
 
 #if TFM_ISOLATION_LEVEL == 1
@@ -425,6 +449,10 @@ enum tfm_hal_status_t tfm_hal_bind_boundary(
     get_partition_named_mmio_list(&mmio_list, &mmio_list_length);
 
     for (i = 0; i < p_ldinf->nassets; i++) {
+
+        assert(p_asset != NULL);
+        assert(mmio_list_length > 0);
+
         if (!(p_asset[i].attr & ASSET_ATTR_NAMED_MMIO)) {
             continue;
         }
@@ -436,7 +464,7 @@ enum tfm_hal_status_t tfm_hal_bind_boundary(
 
         if (j == mmio_list_length) {
             /* The MMIO asset is not in the allowed list of platform. */
-            return TFM_HAL_ERROR_GENERIC;
+            FIH_RET(TFM_HAL_ERROR_GENERIC);
         }
         /* Assume PPC & MPC settings are required even under level 1 */
         plat_data_ptr = REFERENCE_TO_PTR(p_asset[i].dev.dev_ref,
@@ -464,13 +492,13 @@ enum tfm_hal_status_t tfm_hal_bind_boundary(
 
             /* There is a limited number of available MPU regions in v8M */
             if (mpu_region_num <= n_static_regions) {
-                return TFM_HAL_ERROR_GENERIC;
+                FIH_RET(TFM_HAL_ERROR_GENERIC);
             }
             if ((plat_data_ptr->periph_start & ~MPU_RBAR_BASE_Msk) != 0) {
-                return TFM_HAL_ERROR_GENERIC;
+                FIH_RET(TFM_HAL_ERROR_GENERIC);
             }
             if ((plat_data_ptr->periph_limit & ~MPU_RLAR_LIMIT_Msk) != 0x1F) {
-                return TFM_HAL_ERROR_GENERIC;
+                FIH_RET(TFM_HAL_ERROR_GENERIC);
             }
 
             /* Turn off MPU during configuration */
@@ -503,7 +531,7 @@ enum tfm_hal_status_t tfm_hal_bind_boundary(
 #elif TFM_ISOLATION_LEVEL == 3
         /* MMIO Index is limited to 3 bits */
         if (((j + 1) & HANDLE_ATTR_INDEX_MASK) != j + 1) {
-            return TFM_HAL_ERROR_GENERIC;
+            FIH_RET(TFM_HAL_ERROR_GENERIC);
         }
         /* Encode MMIO attributes into the "partition_attrs". */
         partition_attrs |= j + 1;
@@ -521,7 +549,7 @@ enum tfm_hal_status_t tfm_hal_bind_boundary(
      * must have exceeded the limit of 5.
      */
     if (partition_attrs & HANDLE_INDEX_MASK) {
-        return TFM_HAL_ERROR_GENERIC;
+        FIH_RET(TFM_HAL_ERROR_GENERIC);
     }
     HANDLE_ENCODE_INDEX(partition_attrs, idx_boundary_handle);
 #endif /* TFM_ISOLATION_LEVEL == 3 */
@@ -532,12 +560,11 @@ enum tfm_hal_status_t tfm_hal_bind_boundary(
                         HANDLE_ATTR_NS_MASK;
     *p_boundary = (uintptr_t)partition_attrs;
 
-    return TFM_HAL_SUCCESS;
+    FIH_RET(TFM_HAL_SUCCESS);
 }
 
-enum tfm_hal_status_t tfm_hal_activate_boundary(
-                             const struct partition_load_info_t *p_ldinf,
-                             uintptr_t boundary)
+FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_activate_boundary(const struct partition_load_info_t *p_ldinf,
+                                                              uintptr_t boundary)
 {
     CONTROL_Type ctrl;
     uint32_t local_handle = (uint32_t)boundary;
@@ -565,16 +592,16 @@ enum tfm_hal_status_t tfm_hal_activate_boundary(
 
 #if TFM_ISOLATION_LEVEL == 3
     if (is_spm) {
-        return TFM_HAL_SUCCESS;
+        FIH_RET(TFM_HAL_SUCCESS);
     }
 
     if (!p_ldinf) {
-        return TFM_HAL_ERROR_GENERIC;
+        FIH_RET(TFM_HAL_ERROR_GENERIC);
     }
 
     /* Update regions, for unprivileged partitions only */
     if (privileged) {
-        return TFM_HAL_SUCCESS;
+        FIH_RET(TFM_HAL_SUCCESS);
     }
 
     /* Turn off MPU during configuration */
@@ -677,24 +704,24 @@ out:
     /* Enable MPU with the new regions added */
     ARM_MPU_Enable(MPU_CTRL_PRIVDEFENA_Msk | MPU_CTRL_HFNMIENA_Msk);
 
-    return status;
+    FIH_RET(status);
 #else /* TFM_ISOLATION_LEVEL == 3 */
-    return TFM_HAL_SUCCESS;
+    FIH_RET(TFM_HAL_SUCCESS);
 #endif /* TFM_ISOLATION_LEVEL == 3 */
 }
 
-enum tfm_hal_status_t tfm_hal_memory_check(uintptr_t boundary, uintptr_t base,
-                                           size_t size, uint32_t access_type)
+FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_memory_check(uintptr_t boundary, uintptr_t base,
+                                                         size_t size, uint32_t access_type)
 {
     int flags = 0;
 
     /* If size is zero, this indicates an empty buffer and base is ignored */
     if (size == 0) {
-        return TFM_HAL_SUCCESS;
+        FIH_RET(TFM_HAL_SUCCESS);
     }
 
     if (!base) {
-        return TFM_HAL_ERROR_INVALID_INPUT;
+        FIH_RET(TFM_HAL_ERROR_INVALID_INPUT);
     }
 
     if ((access_type & TFM_HAL_ACCESS_READWRITE) == TFM_HAL_ACCESS_READWRITE) {
@@ -702,7 +729,7 @@ enum tfm_hal_status_t tfm_hal_memory_check(uintptr_t boundary, uintptr_t base,
     } else if (access_type & TFM_HAL_ACCESS_READABLE) {
         flags |= CMSE_MPU_READ;
     } else {
-        return TFM_HAL_ERROR_INVALID_INPUT;
+        FIH_RET(TFM_HAL_ERROR_INVALID_INPUT);
     }
 
     if (access_type & TFM_HAL_ACCESS_NS) {
@@ -726,22 +753,22 @@ enum tfm_hal_status_t tfm_hal_memory_check(uintptr_t boundary, uintptr_t base,
     }
 
     if (cmse_check_address_range((void *)base, size, flags) != NULL) {
-        return TFM_HAL_SUCCESS;
+        FIH_RET(TFM_HAL_SUCCESS);
     } else {
-        return TFM_HAL_ERROR_MEM_FAULT;
+        FIH_RET(TFM_HAL_ERROR_MEM_FAULT);
     }
 }
 
-bool tfm_hal_boundary_need_switch(uintptr_t boundary_from,
+FIH_RET_TYPE(bool) tfm_hal_boundary_need_switch(uintptr_t boundary_from,
                                   uintptr_t boundary_to)
 {
     if (boundary_from == boundary_to) {
-        return false;
+        FIH_RET(false);
     }
 
     if (((uint32_t)boundary_from & HANDLE_ATTR_PRIV_MASK) &&
         ((uint32_t)boundary_to & HANDLE_ATTR_PRIV_MASK)) {
-        return false;
+        FIH_RET(false);
     }
-    return true;
+    FIH_RET(true);
 }

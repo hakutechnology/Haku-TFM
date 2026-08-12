@@ -5,9 +5,11 @@
  *
  */
 
+#include <assert.h>
 #include <stdint.h>
 #include <string.h>
-#include "array.h"
+#include "current.h"
+#include "tfm_utils.h"
 #include "tfm_boot_status.h"
 #include "region_defs.h"
 #include "psa_manifest/pid.h"
@@ -19,6 +21,7 @@
 #include "load/partition_defs.h"
 #include "tfm_hal_isolation.h"
 #include "tfm_plat_shared_measurement_data.h"
+#include "coverity_check.h"
 
 /*!
  * \def BOOT_DATA_VALID
@@ -121,16 +124,24 @@ void tfm_core_validate_boot_data(void)
 #ifdef BOOT_DATA_AVAILABLE
     struct tfm_boot_data *boot_data;
     const uintptr_t data_base = tfm_plat_get_shared_measurement_data_base();
-    const uintptr_t data_limit = data_base + tfm_plat_get_shared_measurement_data_size() - 1;
+    const size_t data_size = tfm_plat_get_shared_measurement_data_size();
 
-    const bool overlapping_with_ns =
-        ((data_base >= NS_DATA_START) && (data_base <= NS_DATA_LIMIT)) ||
-        ((data_limit >= NS_DATA_START) && (data_limit <= NS_DATA_LIMIT));
-    if (overlapping_with_ns) {
+    if (data_size < SHARED_DATA_HEADER_SIZE) {
+        /* Data does not contain valid header */
+        return;
+    }
+
+#if defined(NS_DATA_START) && defined(NS_DATA_LIMIT)
+    const uintptr_t data_limit = data_base + data_size - 1;
+
+    /* Test for ordering and overlapping */
+    if ((data_limit <= data_base) ||
+        (!((data_base >= NS_DATA_LIMIT) || (data_limit <= NS_DATA_START)))) {
         assert(false);
         /* Not setting BOOT_DATA_VALID */
         return;
     }
+#endif /* defined (NS_DATA_START) && defined (NS_DATA_LIMIT) */
 
     boot_data = (struct tfm_boot_data *)data_base;
 
@@ -155,13 +166,12 @@ void tfm_core_get_boot_data_handler(uint32_t args[])
     size_t next_tlv_offset = 0;
 #endif /* BOOT_DATA_AVAILABLE */
     const struct partition_t *curr_partition = GET_CURRENT_COMPONENT();
-    fih_int fih_rc = FIH_FAILURE;
-    const uintptr_t data_base = tfm_plat_get_shared_measurement_data_base();
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
 
     FIH_CALL(tfm_hal_memory_check, fih_rc,
              curr_partition->boundary, (uintptr_t)buf_start,
              buf_size, TFM_HAL_ACCESS_READWRITE);
-    if (fih_not_eq(fih_rc, fih_int_encode(PSA_SUCCESS))) {
+    if (FIH_NOT_EQ(fih_rc, PSA_SUCCESS)) {
         args[0] = (uint32_t)PSA_ERROR_INVALID_ARGUMENT;
         return;
     }
@@ -178,9 +188,18 @@ void tfm_core_get_boot_data_handler(uint32_t args[])
     }
 
 #ifdef BOOT_DATA_AVAILABLE
+    const uintptr_t data_base = tfm_plat_get_shared_measurement_data_base();
+    const size_t boot_data_size = tfm_plat_get_shared_measurement_data_size();
+
     /* Get the boundaries of TLV section */
     boot_data = (struct tfm_boot_data *)data_base;
     tlv_end = data_base + boot_data->header.tlv_tot_len;
+
+    if ((size_t)boot_data->header.tlv_tot_len > boot_data_size) {
+        args[0] = (uint32_t)PSA_ERROR_INVALID_ARGUMENT;
+        return;
+    }
+
     offset = data_base + SHARED_DATA_HEADER_SIZE;
 #endif /* BOOT_DATA_AVAILABLE */
 
@@ -189,6 +208,7 @@ void tfm_core_get_boot_data_handler(uint32_t args[])
         args[0] = (uint32_t)PSA_ERROR_INVALID_ARGUMENT;
         return;
     } else {
+        TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_11_3, "Intentional pointer cast");
         boot_data = (struct tfm_boot_data *)buf_start;
         boot_data->header.tlv_magic   = SHARED_DATA_TLV_INFO_MAGIC;
         boot_data->header.tlv_tot_len = SHARED_DATA_HEADER_SIZE;
@@ -201,10 +221,16 @@ void tfm_core_get_boot_data_handler(uint32_t args[])
      */
     for (; offset < tlv_end; offset += next_tlv_offset) {
         /* Create local copy to avoid unaligned access */
+        TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_11_6, "Intentional pointer cast")
         (void)spm_memcpy(&tlv_entry, (const void *)offset,
                          SHARED_DATA_ENTRY_HEADER_SIZE);
 
         next_tlv_offset = SHARED_DATA_ENTRY_HEADER_SIZE + tlv_entry.tlv_len;
+        if (next_tlv_offset < SHARED_DATA_ENTRY_HEADER_SIZE) {
+            /* overflow */
+            args[0] = (uint32_t)PSA_ERROR_INVALID_ARGUMENT;
+            return;
+        }
 
         if (GET_MAJOR(tlv_entry.tlv_type) == tlv_major) {
             /* Check buffer overflow */
@@ -213,6 +239,7 @@ void tfm_core_get_boot_data_handler(uint32_t args[])
                 return;
             }
 
+            TFM_COVERITY_DEVIATE_LINE(MISRA_C_2023_Rule_11_6, "Intentional pointer cast")
             (void)spm_memcpy(ptr, (const void *)offset, next_tlv_offset);
             ptr += next_tlv_offset;
             boot_data->header.tlv_tot_len += next_tlv_offset;

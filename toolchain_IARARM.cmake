@@ -1,6 +1,6 @@
 #-------------------------------------------------------------------------------
+# SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
 # Copyright (c) 2020, IAR Systems AB. All rights reserved.
-# Copyright (c) 2020-2024, Arm Limited. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -20,14 +20,26 @@ else()
     set(CMAKE_ASM_COMPILER_TARGET    arm-arm-none-eabi)
 endif()
 
-set(CMAKE_C_COMPILER iccarm)
-set(CMAKE_CXX_COMPILER iccarm)
-set(CMAKE_ASM_COMPILER iasmarm)
+find_program(CMAKE_C_COMPILER iccarm)
+if(CMAKE_C_COMPILER STREQUAL "CMAKE_C_COMPILER-NOTFOUND")
+    message(FATAL_ERROR "Could not find compiler: 'iccarm'")
+endif()
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_COMPILER ${CMAKE_C_COMPILER})
+
+find_program(CMAKE_ASM_COMPILER iasmarm)
+if(CMAKE_ASM_COMPILER STREQUAL "CMAKE_ASM_COMPILER-NOTFOUND")
+    message(FATAL_ERROR "Could not find assembler: 'iasmarm'")
+endif()
 
 set(LINKER_VENEER_OUTPUT_FLAG --import_cmse_lib_out= )
 set(COMPILER_CMSE_FLAG --cmse)
 
 set(CMAKE_C_FLAGS_DEBUG "-r -On")
+
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+include(imported_target)
 
 # This variable name is a bit of a misnomer. The file it is set to is included
 # at a particular step in the compiler initialisation. It is used here to
@@ -60,7 +72,7 @@ add_compile_options(
     $<$<COMPILE_LANGUAGE:C,CXX>:-D_NO_DEFINITIONS_IN_HEADER_FILES>
     $<$<COMPILE_LANGUAGE:C,CXX>:--diag_suppress=Pe546,Pe940,Pa082,Pa084>
     $<$<COMPILE_LANGUAGE:C,CXX>:--no_path_in_file_macros>
-    $<$<AND:$<COMPILE_LANGUAGE:C,CXX,ASM>,$<BOOL:${TFM_DEBUG_SYMBOLS}>,$<CONFIG:Release,MinSizeRel>>:-r>
+    $<$<AND:$<COMPILE_LANGUAGE:C,CXX,ASM>,$<CONFIG:Release,MinSizeRel>>:-r>
     $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<BOOL:${CONFIG_TFM_WARNINGS_ARE_ERRORS}>>:--warnings_are_errors>
 )
 
@@ -170,6 +182,15 @@ if(NOT ${CONFIG_TFM_BRANCH_PROTECTION_FEAT} STREQUAL BRANCH_PROTECTION_DISABLED 
         endif()
 endif()
 
+# tfm_s specific compile and link options
+add_library(tfm_s_build_flags INTERFACE)
+
+# BL2 specific compile and link options
+add_library(bl2_build_flags INTERFACE)
+
+# BL1 specific compile and link options
+add_library(bl1_build_flags INTERFACE)
+
 # Behaviour for handling scatter files is so wildly divergent between compilers
 # that this macro is required.
 macro(target_add_scatter_file target)
@@ -192,6 +213,7 @@ macro(target_add_scatter_file target)
         set_source_files_properties(${SCATTER_FILE_PATH}
             PROPERTIES
             LANGUAGE C
+            KEEP_EXTENSION True # Don't use .o extension for the preprocessed file
         )
     endforeach()
 
@@ -238,7 +260,7 @@ macro(add_convert_to_bin_target target)
             ${bin_dir}/${target}.elf
     )
 
-    add_custom_target(${target}_hex
+    add_custom_target(${target}_hex_build
         SOURCES ${bin_dir}/${target}.hex
     )
     add_custom_command(OUTPUT ${bin_dir}/${target}.hex
@@ -248,6 +270,8 @@ macro(add_convert_to_bin_target target)
             --ihex $<TARGET_FILE:${target}>
             ${bin_dir}/${target}.hex
     )
+
+    add_imported_target(${target}_hex ${target}_hex_build "${bin_dir}/${target}.hex")
 
     add_custom_target(${target}_binaries
         ALL

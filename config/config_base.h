@@ -1,8 +1,5 @@
 /*
- * Copyright (c) 2022-2025, Arm Limited. All rights reserved.
- * Copyright (c) 2023-2024 Cypress Semiconductor Corporation (an Infineon
- * company) or an affiliate of Cypress Semiconductor Corporation. All rights
- * reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -286,12 +283,14 @@
 #endif
 
 /* Secure Test Partition Configs */
+#ifndef SECURE_TEST_PARTITION_STACK_SIZE
 #ifdef TFM_PARTITION_DPE
 /* DPE tests require larger test partition stack */
 #define SECURE_TEST_PARTITION_STACK_SIZE        0x3000
 #else
-#define SECURE_TEST_PARTITION_STACK_SIZE        0x0F00
-#endif
+#define SECURE_TEST_PARTITION_STACK_SIZE        0x1200
+#endif /* TFM_PARTITION_DPE */
+#endif /* SECURE_TEST_PARTITION_STACK_SIZE */
 
 /* SPM Configs */
 
@@ -319,7 +318,8 @@
     /* default, nothing to do, no overrides */
 #endif
 
-#if (CONFIG_TFM_HYBRID_PLAT_SCHED_TYPE == TFM_HYBRID_PLAT_SCHED_SPE)
+#if (CONFIG_TFM_HYBRID_PLAT_SCHED_TYPE == TFM_HYBRID_PLAT_SCHED_SPE) || \
+    (CONFIG_TFM_HYBRID_PLAT_SCHED_TYPE == TFM_HYBRID_PLAT_SCHED_BALANCED)
     #ifndef CONFIG_TFM_SCHEDULE_WHEN_NS_INTERRUPTED
     #define CONFIG_TFM_SCHEDULE_WHEN_NS_INTERRUPTED 1
     #define CONFIG_TFM_SPM_BACKEND_IPC 1
@@ -352,9 +352,26 @@
 #define CONFIG_TFM_POST_PARTITION_INIT_HOOK     0
 #endif
 
+/*
+ * If this option is enabled, tfm_hal_shared_metadata_rw_enable and
+ * tfm_hal_shared_metadata_rw_disable are invoked by SPM immediately before
+ * and after updating the partition metadata pointer.
+ * This ensures SPM has read-write access during metadata updates, while
+ * partitions retain read-only access at all other times for improved isolation
+ * and safety.
+ */
+#ifndef CONFIG_TFM_PARTITION_META_DYNAMIC_ISOLATION
+#define CONFIG_TFM_PARTITION_META_DYNAMIC_ISOLATION 0
+#endif
+
 /* Enable OTP/NV_COUNTERS emulation in RAM */
 #ifndef OTP_NV_COUNTERS_RAM_EMULATION
 #define OTP_NV_COUNTERS_RAM_EMULATION           0
+#endif
+
+/* Does the platform provide platform-specific exception info store/dump? */
+#ifndef PLATFORM_EXCEPTION_INFO
+#define PLATFORM_EXCEPTION_INFO                 0
 #endif
 
 /* Error Codes Configs */

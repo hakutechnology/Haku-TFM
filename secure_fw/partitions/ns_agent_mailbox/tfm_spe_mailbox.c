@@ -1,7 +1,5 @@
 /*
  * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
- * Copyright (c) 2021-2024 Cypress Semiconductor Corporation (an Infineon company)
- * or an affiliate of Cypress Semiconductor Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -16,6 +14,8 @@
 
 #include "async.h"
 #include "config_impl.h"
+#include "current.h"
+#include "fih.h"
 #include "internal_status_code.h"
 #include "psa/error.h"
 #include "utilities.h"
@@ -24,10 +24,10 @@
 #include "tfm_psa_call_pack.h"
 #include "tfm_spe_mailbox.h"
 #include "tfm_rpc.h"
+#include "tfm_hal_isolation.h"
 #include "tfm_hal_multi_core.h"
 #include "tfm_multi_core.h"
 #include "ffm/mailbox_agent_api.h"
-
 
 /* If there's no dcache at all, the SCB cache functions won't exist */
 /* If the mailbox is uncached on the S side, no need to flush and invalidate */
@@ -48,7 +48,6 @@ static struct secure_mailbox_queue_t spe_mailbox_queue;
 struct vectors {
     psa_invec in_vec[PSA_MAX_IOVEC];
     psa_outvec out_vec[PSA_MAX_IOVEC];
-    psa_outvec *original_out_vec;
     size_t out_len;
     bool in_use;
 };
@@ -158,21 +157,20 @@ __STATIC_INLINE struct mailbox_reply_t *get_nspe_reply_addr(uint8_t idx)
 static void mailbox_direct_reply(uint8_t idx, uint32_t result)
 {
     struct mailbox_reply_t *reply_ptr;
-    uint32_t ret_result = result;
+
+    /* Get reply address */
+    reply_ptr = get_nspe_reply_addr(idx);
+    reply_ptr->return_val = result;
 
     /* Copy outvec lengths back if necessary */
-    if ((vectors[idx].in_use) && (result == PSA_SUCCESS)) {
-        for (int i = 0; i < vectors[idx].out_len; i++) {
-            vectors[idx].original_out_vec[i].len = vectors[idx].out_vec[i].len;
+    if (vectors[idx].in_use && (result == PSA_SUCCESS)) {
+        for (int i = 0; i < PSA_MAX_IOVEC; i++) {
+            reply_ptr->out_vec_len[i] = vectors[idx].out_vec[i].len;
         }
     }
 
     vectors[idx].in_use = false;
 
-    /* Get reply address */
-    reply_ptr = get_nspe_reply_addr(idx);
-    spm_memcpy(&reply_ptr->return_val, &ret_result,
-               sizeof(reply_ptr->return_val));
     MAILBOX_CLEAN_CACHE(reply_ptr, sizeof(*reply_ptr));
 
     mailbox_clean_queue_slot(idx);
@@ -183,16 +181,10 @@ static void mailbox_direct_reply(uint8_t idx, uint32_t result)
      */
 }
 
-__STATIC_INLINE int32_t check_mailbox_msg(const struct mailbox_msg_t *msg)
-{
-    /*
-     * TODO
-     * Comprehensive check of mailbox msessage content can be implemented here.
-     */
-    (void)msg;
-    return MAILBOX_SUCCESS;
-}
-
+/*
+ * The full validation of the copied vectors[] take place inside SPM within
+ * spm_associate_call_params from tfm_rpc_psa_call().
+ */
 static int local_copy_vects(const struct psa_client_params_t *params,
                             uint32_t idx,
                             uint32_t *control)
@@ -201,11 +193,6 @@ static int local_copy_vects(const struct psa_client_params_t *params,
 
     in_len = params->psa_call_params.in_len;
     out_len = params->psa_call_params.out_len;
-
-    if (((params->psa_call_params.out_vec == NULL) && (out_len != 0)) ||
-        ((params->psa_call_params.in_vec == NULL) && (in_len != 0))) {
-        return MAILBOX_INVAL_PARAMS;
-    }
 
     if ((in_len > PSA_MAX_IOVEC) ||
         (out_len > PSA_MAX_IOVEC) ||
@@ -216,6 +203,10 @@ static int local_copy_vects(const struct psa_client_params_t *params,
     for (unsigned int i = 0; i < PSA_MAX_IOVEC; i++) {
         if (i < in_len) {
             vectors[idx].in_vec[i] = params->psa_call_params.in_vec[i];
+            if ((vectors[idx].in_vec[i].base == NULL) &&
+                (vectors[idx].in_vec[i].len != 0)) {
+                return MAILBOX_INVAL_PARAMS;
+            }
         } else {
             vectors[idx].in_vec[i].base = 0;
             vectors[idx].in_vec[i].len = 0;
@@ -225,6 +216,10 @@ static int local_copy_vects(const struct psa_client_params_t *params,
     for (unsigned int i = 0; i < PSA_MAX_IOVEC; i++) {
         if (i < out_len) {
             vectors[idx].out_vec[i] = params->psa_call_params.out_vec[i];
+            if ((vectors[idx].out_vec[i].base == NULL) &&
+                (vectors[idx].out_vec[i].len != 0)) {
+                return MAILBOX_INVAL_PARAMS;
+            }
         } else {
             vectors[idx].out_vec[i].base = 0;
             vectors[idx].out_vec[i].len = 0;
@@ -235,7 +230,6 @@ static int local_copy_vects(const struct psa_client_params_t *params,
     *control = PARAM_SET_NS_OUTVEC(*control);
 
     vectors[idx].out_len = out_len;
-    vectors[idx].original_out_vec = params->psa_call_params.out_vec;
 
     vectors[idx].in_use = true;
     return MAILBOX_SUCCESS;
@@ -282,13 +276,6 @@ static int32_t tfm_mailbox_dispatch(const struct mailbox_msg_t *msg_ptr,
         break;
 
     case MAILBOX_PSA_CALL:
-        ret = local_copy_vects(params, idx, &control);
-        if (ret != MAILBOX_SUCCESS) {
-            sync = true;
-            psa_ret = PSA_ERROR_INVALID_ARGUMENT;
-            break;
-        }
-
         if (tfm_multi_core_hal_client_id_translate(CLIENT_ID_OWNER_MAGIC,
                                                    msg_ptr->client_id,
                                                    &client_id) != SPM_SUCCESS) {
@@ -296,6 +283,14 @@ static int32_t tfm_mailbox_dispatch(const struct mailbox_msg_t *msg_ptr,
             psa_ret = PSA_ERROR_INVALID_ARGUMENT;
             break;
         }
+
+        ret = local_copy_vects(params, idx, &control);
+        if (ret != MAILBOX_SUCCESS) {
+            sync = true;
+            psa_ret = PSA_ERROR_INVALID_ARGUMENT;
+            break;
+        }
+
         client_params.ns_client_id_stateless = client_id;
         client_params.p_invecs = vectors[idx].in_vec;
         client_params.p_outvecs = vectors[idx].out_vec;
@@ -376,7 +371,9 @@ int32_t tfm_mailbox_handle_msg(void)
         return MAILBOX_NO_PEND_EVENT;
     }
 
-    for (idx = 0; idx < spe_mailbox_queue.ns_slot_count; idx++) {
+    for (idx = 0;
+         (idx < spe_mailbox_queue.ns_slot_count) && (idx < NUM_MAILBOX_QUEUE_SLOT);
+         idx++) {
         mask_bits = (1 << idx);
         /* Check if current NSPE mailbox queue slot is pending for handling */
         if (!(pend_slots & mask_bits)) {
@@ -396,11 +393,6 @@ int32_t tfm_mailbox_handle_msg(void)
         msg_ptr = &spe_mailbox_queue.queue[idx].msg;
         MAILBOX_INVALIDATE_CACHE(&spe_mailbox_queue.ns_slots[idx].msg, sizeof(*msg_ptr));
         spm_memcpy(msg_ptr, &spe_mailbox_queue.ns_slots[idx].msg, sizeof(*msg_ptr));
-
-        if (check_mailbox_msg(msg_ptr) != MAILBOX_SUCCESS) {
-            mailbox_clean_queue_slot(idx);
-            continue;
-        }
 
         get_spe_mailbox_msg_handle(idx,
                                    &spe_mailbox_queue.queue[idx].msg_handle);
@@ -513,6 +505,45 @@ static const struct tfm_rpc_ops_t mailbox_rpc_ops = {
     .process_new_msg = mailbox_process_new_msg,
 };
 
+/*
+ * Validate that the ranges stored in spe_mailbox_queue are NS
+ * read/write accessible. Also validate the slots count.
+ * If the validation fails, the ns_agent_mailbox entry point panics.
+ */
+static int32_t validate_mailbox_address_ranges(void)
+{
+    FIH_DECLARE(fih_rc, FIH_FAILURE);
+    const struct partition_t *partition = GET_CURRENT_COMPONENT();
+    struct secure_mailbox_queue_t *s_queue = &spe_mailbox_queue;
+
+    if ((s_queue->ns_slot_count > NUM_MAILBOX_QUEUE_SLOT) ||
+        (s_queue->ns_slot_count == 0)){
+        return MAILBOX_INIT_ERROR;
+    }
+
+    FIH_CALL(tfm_hal_memory_check,
+             fih_rc,
+             partition->boundary,
+             (uintptr_t)s_queue->ns_status,
+             sizeof(*s_queue->ns_status),
+             (TFM_HAL_ACCESS_READWRITE | TFM_HAL_ACCESS_NS));
+    if (FIH_NOT_EQ(fih_rc, PSA_SUCCESS)) {
+        return MAILBOX_INVAL_PARAMS;
+    }
+
+    FIH_CALL(tfm_hal_memory_check,
+             fih_rc,
+             partition->boundary,
+             (uintptr_t)s_queue->ns_slots,
+             sizeof(*s_queue->ns_slots) * s_queue->ns_slot_count,
+             (TFM_HAL_ACCESS_READWRITE | TFM_HAL_ACCESS_NS));
+    if (FIH_NOT_EQ(fih_rc, PSA_SUCCESS)) {
+        return MAILBOX_INVAL_PARAMS;
+    }
+
+    return MAILBOX_SUCCESS;
+}
+
 static int32_t tfm_mailbox_init(void)
 {
     int32_t ret;
@@ -536,6 +567,13 @@ static int32_t tfm_mailbox_init(void)
      * NSPE mailbox queue
      */
     ret = tfm_mailbox_hal_init(&spe_mailbox_queue);
+    if (ret != MAILBOX_SUCCESS) {
+        tfm_rpc_unregister_ops();
+
+        return ret;
+    }
+
+    ret = validate_mailbox_address_ranges();
     if (ret != MAILBOX_SUCCESS) {
         tfm_rpc_unregister_ops();
 

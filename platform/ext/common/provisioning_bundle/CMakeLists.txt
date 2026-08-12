@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Copyright (c) 2023-2024, Arm Limited. All rights reserved.
+# SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -39,22 +39,21 @@ endif()
 
 target_link_options(provisioning_bundle
     PRIVATE
-        $<$<C_COMPILER_ID:GNU>:-Wl,-Map=${CMAKE_BINARY_DIR}/bin/provisioning_bundle.map>
+        $<$<C_COMPILER_ID:GNU,Clang>:LINKER:-Map=${CMAKE_BINARY_DIR}/bin/provisioning_bundle.map>
         $<$<C_COMPILER_ID:ARMClang>:--map>
         $<$<C_COMPILER_ID:IAR>:--map\;${CMAKE_BINARY_DIR}/bin/provisioning_bundle.map>
-        $<$<C_COMPILER_ID:Clang>:-Wl,-Map=${CMAKE_BINARY_DIR}/bin/provisioning_bundle.map>
 )
 
 target_link_options(provisioning_bundle
     PRIVATE
-        --entry=do_provision
+        $<$<C_COMPILER_ID:ARMClang,IAR>:LINKER:--entry=do_provision>
 )
 
 target_sources(provisioning_bundle
     PRIVATE
-        ./provisioning_code.c
-        ./provisioning_data.c
-        $<$<BOOL:${CONFIG_GNU_SYSCALL_STUB_ENABLED}>:${CMAKE_SOURCE_DIR}/platform/ext/common/syscalls_stub.c>
+        provisioning_code.c
+        provisioning_data.c
+        $<$<C_COMPILER_ID:GNU>:${CMAKE_SOURCE_DIR}/platform/ext/common/syscalls_stub.c>
 )
 
 target_include_directories(provisioning_bundle
@@ -65,6 +64,7 @@ target_include_directories(provisioning_bundle
 target_link_libraries(provisioning_bundle
     platform_s
     psa_interface
+    psa_crypto_config
 )
 
 target_compile_definitions(provisioning_bundle
@@ -75,8 +75,6 @@ target_compile_definitions(provisioning_bundle
         $<$<BOOL:${TFM_DUMMY_PROVISIONING}>:TFM_DUMMY_PROVISIONING>
         $<$<BOOL:${PLATFORM_DEFAULT_NV_COUNTERS}>:PLATFORM_DEFAULT_NV_COUNTERS>
         $<$<BOOL:${PLATFORM_DEFAULT_OTP_WRITEABLE}>:OTP_WRITEABLE>
-        MBEDTLS_CONFIG_FILE="${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/tfm_mbedcrypto_config_default.h"
-        MBEDTLS_PSA_CRYPTO_CONFIG_FILE="${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/crypto_config_default.h"
 )
 
 add_custom_target(provisioning_bundle_bin
